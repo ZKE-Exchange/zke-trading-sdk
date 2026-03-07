@@ -63,7 +63,7 @@ echo "[5/8] API Configuration"
 
 echo ""
 echo "Create API keys at:"
-echo "https://zke.com/user/api"
+echo "https://www.zke.com/en_US/personal/apiManagement"
 echo ""
 
 read -rp "Enter ZKE API Key: " API_KEY
