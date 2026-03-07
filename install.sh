@@ -99,7 +99,6 @@ echo "✓ Dependencies installed"
 
 echo ""
 echo "[6/9] API Configuration"
-
 echo ""
 echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
@@ -112,25 +111,34 @@ echo ""
 echo ""
 echo "Generating config.json..."
 
-cat > "$INSTALL_DIR/config.json" << EOF
-{
-  "spot": {
-    "base_url": "$SPOT_URL",
-    "api_key": "$API_KEY",
-    "api_secret": "$API_SECRET",
-    "recv_window": $RECV_WINDOW
-  },
-  "futures": {
-    "base_url": "$FUTURES_URL",
-    "api_key": "$API_KEY",
-    "api_secret": "$API_SECRET",
-    "recv_window": $RECV_WINDOW
-  },
-  "ws": {
-    "url": "$WS_URL"
-  }
+export INSTALL_DIR SPOT_URL FUTURES_URL WS_URL RECV_WINDOW API_KEY API_SECRET
+
+python << 'PY'
+import json
+import os
+from pathlib import Path
+
+install_dir = Path(os.environ["INSTALL_DIR"])
+config = {
+    "spot": {
+        "base_url": os.environ["SPOT_URL"],
+        "api_key": os.environ["API_KEY"],
+        "api_secret": os.environ["API_SECRET"],
+        "recv_window": int(os.environ["RECV_WINDOW"]),
+    },
+    "futures": {
+        "base_url": os.environ["FUTURES_URL"],
+        "api_key": os.environ["API_KEY"],
+        "api_secret": os.environ["API_SECRET"],
+        "recv_window": int(os.environ["RECV_WINDOW"]),
+    },
+    "ws": {
+        "url": os.environ["WS_URL"],
+    },
 }
-EOF
+with open(install_dir / "config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, ensure_ascii=False, indent=2)
+PY
 
 echo "✓ config.json created"
 
