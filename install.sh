@@ -3,11 +3,10 @@
 set -euo pipefail
 
 echo "======================================"
-echo "Installing ZKE Trading Skill"
+echo "Installing ZKE Trading SDK (Local/MCP)"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
-SKILL_DIR="$HOME/.openclaw/skills/zke_trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
 
 SPOT_URL="https://openapi.zke.com"
@@ -37,7 +36,7 @@ prompt_tty_secret() {
 }
 
 echo ""
-echo "[1/9] Checking dependencies..."
+echo "[1/8] Checking dependencies..."
 
 if ! command -v git >/dev/null 2>&1; then
     echo "ERROR: git is required."
@@ -47,7 +46,7 @@ fi
 echo "✓ git detected"
 
 echo ""
-echo "[2/9] Detecting compatible Python..."
+echo "[2/8] Detecting compatible Python..."
 
 find_python() {
     for PY in python3 python3.13 python3.12 python3.11 python3.10; do
@@ -82,7 +81,7 @@ else
 fi
 
 echo ""
-echo "[3/9] Downloading or updating SDK..."
+echo "[3/8] Downloading or updating SDK..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Updating existing installation"
@@ -94,7 +93,7 @@ else
 fi
 
 echo ""
-echo "[4/9] Creating Python virtual environment..."
+echo "[4/8] Creating Python virtual environment..."
 
 if [ -d ".venv" ]; then
     echo "Existing virtual environment found. Recreating..."
@@ -108,7 +107,7 @@ source .venv/bin/activate
 echo "✓ Virtual environment created"
 
 echo ""
-echo "[5/9] Installing dependencies..."
+echo "[5/8] Installing dependencies..."
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
@@ -116,7 +115,7 @@ pip install -r requirements.txt
 echo "✓ Dependencies installed"
 
 echo ""
-echo "[6/9] API Configuration"
+echo "[6/8] API Configuration"
 echo ""
 echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
@@ -169,20 +168,7 @@ print("✓ config.json created")
 PY
 
 echo ""
-echo "[7/9] Installing OpenClaw shared skill..."
-
-mkdir -p "$SKILL_DIR"
-
-if [ -f "$INSTALL_DIR/openclaw/skills/zke_trading/SKILL.md" ]; then
-    cp "$INSTALL_DIR/openclaw/skills/zke_trading/SKILL.md" "$SKILL_DIR/SKILL.md"
-    echo "✓ Skill installed to: $SKILL_DIR"
-else
-    echo "ERROR: SKILL.md not found in repository"
-    exit 1
-fi
-
-echo ""
-echo "[8/9] Restarting MCP server..."
+echo "[7/8] Restarting local MCP server..."
 
 if pgrep -f "mcp_server.py" >/dev/null 2>&1; then
     echo "Existing MCP server found. Stopping..."
@@ -215,31 +201,22 @@ else
 fi
 
 echo ""
-echo "[9/9] Installation complete"
+echo "[8/8] Installation complete"
 
 echo ""
 echo "======================================"
-echo "ZKE Trading Skill installed"
+echo "ZKE Trading SDK installed"
 echo "======================================"
 echo ""
 echo "Install location:"
 echo "  $INSTALL_DIR"
-echo ""
-echo "Skill location:"
-echo "  $SKILL_DIR"
-echo ""
-echo "Next steps:"
-echo "  1. Restart OpenClaw / gateway"
-echo "  2. Try prompts:"
-echo "     Check BTC price on ZKE"
-echo "     Show my USDT balance on ZKE"
 echo ""
 echo "Manual SDK test:"
 echo "  cd $INSTALL_DIR"
 echo "  source .venv/bin/activate"
 echo "  python main.py ticker BTCUSDT"
 echo ""
-echo "If MCP was not started automatically:"
+echo "Manual MCP start:"
 echo "  cd $INSTALL_DIR"
 echo "  source .venv/bin/activate"
 echo "  python mcp_server.py"
