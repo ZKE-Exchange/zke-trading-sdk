@@ -1,250 +1,320 @@
-ZKE Trading SDK
+# ZKE Trading SDK
 
-Official open source trading toolkit for ZKE Exchange.
-Run `python main.py ticker BTCUSDT` to get the price.
-This project provides a complete Python SDK + CLI + MCP server for interacting with the ZKE Exchange API, including:
-	•	Spot trading
-	•	Futures trading
-	•	Margin trading
-	•	Withdraw API
-	•	WebSocket market data
-	•	AI agent integration (MCP / OpenClaw)
+Official Python SDK, MCP Server, and OpenClaw Plugin for ZKE Exchange.
 
-The SDK can be used by:
-	•	traders
-	•	developers
-	•	quantitative trading systems
-	•	AI agents
+ZKE Trading SDK provides a unified toolkit for interacting with the ZKE Exchange API.
 
-⸻
+Developers and AI agents can access ZKE trading capabilities using:
 
-Features
+- Python SDK
+- Local MCP server
+- OpenClaw AI plugin
 
-Trading APIs
-	•	Spot trading
-	•	Futures trading
-	•	Margin trading
-	•	Withdraw API
-	•	Account balance query
-	•	Order management
+This repository enables programmatic trading, market data access, and AI-driven automation.
 
-Market Data
-	•	REST market API
-	•	WebSocket real-time market data
-	•	ticker
-	•	depth
-	•	trades
-	•	kline streams
+---
 
-Developer Tools
-	•	Python SDK
-	•	CLI trading tool
-	•	MCP server for AI tools
-	•	OpenClaw skill support
+# Features
 
-⸻
+- Spot market data
+- Spot trading
+- Futures market data
+- Futures trading
+- Wallet operations
+- Withdraw API
+- Python CLI interface
+- Local MCP server for AI agents
+- OpenClaw plugin integration
 
-📦 Project Structure
+---
+
+# Architecture
+
+```text
+AI Agent / OpenClaw
+        │
+        │ tools
+        ▼
+ZKE OpenClaw Plugin
+        │
+        │ CLI / SDK
+        ▼
+Python Trading SDK
+(main.py + tools/)
+        │
+        │ REST API
+        ▼
+ZKE Exchange
+```
+
+The SDK can be used directly through Python, or through AI systems via MCP or OpenClaw tools.
+
+---
+
+# Repository Structure
+
+```text
 zke-trading-sdk/
 
-├── main.py                 # CLI trading tool
-├── mcp_server.py           # MCP server for AI agents
-├── config.example.json     # example configuration
+├── docs/
+│   Additional documentation
+│
+├── examples/
+│   Example usage files
+│
+├── openclaw-plugin/
+│   OpenClaw plugin implementation
+│
+├── tools/
+│   Core Python API wrappers and trading logic
+│
+├── main.py
+│   Python CLI entry point
+│
+├── mcp_server.py
+│   Local MCP server for AI agents
+│
+├── install.sh
+│   Install SDK and MCP environment
+│
+├── install_openclaw_plugin.sh
+│   One-click OpenClaw plugin installer
+│
+├── config.example.json
+│   Example configuration file
+│
 ├── requirements.txt
+│   Python dependencies
 │
-├── tools/                  # core SDK implementation
-│   ├── account_service.py
-│   ├── common.py
-│   ├── errors.py
-│   ├── field_mapper.py
-│   ├── formatters.py
-│   │
-│   ├── spot_public.py
-│   ├── spot_private.py
-│   │
-│   ├── futures_public.py
-│   ├── futures_private.py
-│   ├── futures_account_service.py
-│   ├── futures_order_service.py
-│   ├── futures_service.py
-│   │
-│   ├── margin_private.py
-│   ├── margin_order_service.py
-│   │
-│   ├── market_service.py
-│   ├── order_service.py
-│   ├── withdraw_service.py
-│   │
-│   ├── symbol_utils.py
-│   │
-│   ├── ws_client.py
-│   ├── ws_parser.py
-│   ├── ws_service.py
-│   │
-│   └── zke_client.py
-│
-├── openclaw/               # OpenClaw skill plugin
-│   ├── openclaw.plugin.json
-│   └── skills/
-│       └── zke_trading/
-│           └── SKILL.md
-│
-├── docs/                   # project documentation
-└── examples/               # usage examples
+└── README.md
+```
 
-Installation
+---
 
-Clone the repository
-git clone https://github.com/zke-exchange/zke-trading-sdk.git
+# Installation
+
+## Option 1 — Python SDK (Developer)
+
+Clone the repository:
+
+```bash
+git clone https://github.com/ZKE-Exchange/zke-trading-sdk
 cd zke-trading-sdk
+```
 
-Create Python virtual environment
+Create a Python environment:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
 
-Install dependencies
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-Configuration
+Create a configuration file:
 
-Copy the example configuration file
+```bash
 cp config.example.json config.json
+```
 
-Edit the file and add your API credentials.
+Edit `config.json` and add your API credentials.
 
 Example:
 
+```json
 {
   "spot": {
     "base_url": "https://openapi.zke.com",
     "api_key": "YOUR_API_KEY",
-    "api_secret": "YOUR_API_SECRET",
-    "recv_window": 5000
-  },
-  "futures": {
-    "base_url": "https://futuresopenapi.zke.com",
-    "api_key": "YOUR_API_KEY",
-    "api_secret": "YOUR_API_SECRET",
-    "recv_window": 5000
-  },
-  "ws": {
-    "url": "wss://ws.zke.com/kline-api/ws"
+    "api_secret": "YOUR_API_SECRET"
   }
 }
+```
 
-CLI Usage
+---
 
-The SDK includes a simple CLI interface.
+# Python CLI Usage
 
-Check API connectivity
-python main.py ping
+Get market ticker:
 
-Get market ticker
+```bash
 python main.py ticker BTCUSDT
+```
 
-Create spot order
-python main.py create-order BTCUSDT BUY LIMIT 0.001 60000
+Example response:
 
-Cancel order
-python main.py cancel-order BTCUSDT ORDER_ID
+```json
+{
+  "high": "68539.78",
+  "vol": "3628.11269161",
+  "last": "67621.67",
+  "buy": 67621.33,
+  "sell": 67622.02
+}
+```
 
-Query account balance
-python main.py account
+Get order book depth:
 
-WebSocket Market Data
-The SDK supports real-time market data via WebSocket.
+```bash
+python main.py depth BTCUSDT
+```
 
-Ticker stream
-python main.py ws-ticker BTCUSDT
+---
 
-Depth stream
-python main.py ws-depth BTCUSDT
+# Local MCP Server
 
-Trades stream
-python main.py ws-trades BTCUSDT
+This project includes a local MCP server that exposes ZKE trading tools for AI agents.
 
-Kline stream
-python main.py ws-kline BTCUSDT 1min
+Start the server:
 
-Supported intervals:
-1min
-5min
-15min
-30min
-60min
-1day
-1week
-1month
-
-MCP Server (AI Agent Integration)
-This project includes a Model Context Protocol (MCP) server that exposes trading tools for AI agents.
-
-Start MCP server
+```bash
 python mcp_server.py
+```
 
-Available tools include:
-	•	get_spot_balance
-	•	get_spot_ticker
-	•	create_spot_order
-	•	cancel_spot_order
-	•	get_futures_positions
-	•	create_futures_order
-	•	create_withdraw
-	•	get_withdraw_history
+The MCP server exposes tools such as:
 
-These tools can be used by AI agents or automation frameworks.
+```
+zke_get_spot_ticker
+zke_get_spot_depth
+zke_get_spot_balance
+zke_get_futures_positions
+zke_create_spot_order
+zke_create_withdraw
+```
 
-OpenClaw Skill Integration
+These tools can be used by MCP-compatible AI systems.
 
-This repository includes a ZKE Trading Skill for OpenClaw.
+---
 
-Install the plugin by copying the openclaw directory into:
+# OpenClaw Plugin (Recommended)
 
-~/.openclaw/plugins/
+You can install the OpenClaw plugin with one command:
 
-Restart OpenClaw and the ZKE trading tools will become available to the AI agent.
+```bash
+curl -s https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh | bash
+```
 
-Example prompts:
+The installer will:
+
+- install the Python SDK
+- configure the environment
+- build the OpenClaw plugin
+- install the plugin
+- enable ZKE trading tools
+
+---
+
+# OpenClaw Configuration
+
+Ensure OpenClaw allows full tool access.
+
+Edit:
+
+```
+~/.openclaw/openclaw.json
+```
+
+Make sure the configuration includes:
+
+```json
+{
+  "tools": {
+    "profile": "full"
+  }
+}
+```
+
+Restart OpenClaw after editing the configuration.
+
+---
+
+# Example OpenClaw Commands
+
+After installing the plugin, you can ask:
+
+```
 Check BTC price on ZKE
-Show my USDT balance
-Place BTC limit order at 60000
-Withdraw 20 USDT
+Show my USDT balance on ZKE
+Show my futures positions on ZKE
+Place a BTC limit order
+Withdraw 20 USDT on ZKE
+```
 
-Supported Markets
+The AI assistant will automatically call the ZKE trading tools.
 
-The SDK currently supports:
-	•	Spot Trading
-	•	Futures Trading
-	•	Margin Trading
-	•	Withdraw API
-	•	REST Market Data
-	•	WebSocket Market Data
+---
 
-⸻
+# MCP Tool List
 
-🔒 Security Notes
+### Spot
 
-Never expose your API keys publicly.
+```
+zke_get_spot_ticker
+zke_get_spot_depth
+zke_get_spot_balance
+zke_get_spot_open_orders
+zke_get_spot_my_trades
+zke_create_spot_order
+zke_cancel_spot_order
+```
 
-Recommended settings:
-	•	Enable IP whitelist
-	•	Disable withdraw permission if not required
-	•	Use separate keys for trading and withdrawals
+### Futures
 
+```
+zke_get_futures_ticker
+zke_get_futures_index
+zke_get_futures_balance
+zke_get_futures_positions
+zke_get_futures_open_orders
+zke_get_futures_my_trades
+zke_get_futures_order_history
+zke_get_futures_profit_history
+zke_create_futures_order
+zke_cancel_futures_order
+```
 
-📄 License
+### Wallet
+
+```
+zke_get_withdraw_history
+zke_create_withdraw
+```
+
+---
+
+# Security
+
+Never expose your API secret.
+
+Recommended API permissions:
+
+- Read
+- Trade
+
+Disable withdraw permission unless necessary.
+
+---
+
+# License
 
 MIT License
 
+---
 
-ZKE Exchange
+# About ZKE Exchange
 
-Official website
+ZKE Exchange provides a secure and high-performance cryptocurrency trading platform.
 
-https://zke.com
+Official website:
 
-Contributing
+https://www.zke.com
 
-Contributions are welcome.
+---
 
-If you find a bug or want to suggest improvements, please open an issue or submit a pull request.
+# Support
+
+If you encounter issues or have feature requests, please open an issue on GitHub.
