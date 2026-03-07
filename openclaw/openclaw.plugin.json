@@ -1,0 +1,15 @@
+{
+  "id": "zke-trading",
+  "name": "ZKE Trading",
+  "version": "1.0.0",
+  "description": "OpenClaw plugin for ZKE Exchange trading tools, including spot, futures, margin, withdraw and WebSocket market data.",
+  "author": "ZKE Exchange",
+  "skills": [
+    "skills/zke_trading"
+  ],
+  "tools": [],
+  "entry": "",
+  "config": {
+    "mcp_command": "python mcp_server.py"
+  }
+}
