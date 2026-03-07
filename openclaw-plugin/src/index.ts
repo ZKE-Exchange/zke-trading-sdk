@@ -2,6 +2,9 @@ import type { PluginConfig, ToolSpec } from "./types.js";
 import { createSpotTools } from "./tools/spot.js";
 import { createFuturesTools } from "./tools/futures.js";
 import { createWalletTools } from "./tools/wallet.js";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 function getConfig(api: any): PluginConfig {
   return api?.config || api?.getConfig?.() || {};
@@ -19,30 +22,32 @@ function resolveRegisterFn(api: any): ((tool: any) => any) | null {
   if (typeof api?.registerAgentTool === "function") {
     return api.registerAgentTool.bind(api);
   }
-
   if (typeof api?.registerTool === "function") {
     return api.registerTool.bind(api);
   }
-
   if (typeof api?.tools?.registerAgentTool === "function") {
     return api.tools.registerAgentTool.bind(api.tools);
   }
-
   if (typeof api?.tools?.registerTool === "function") {
     return api.tools.registerTool.bind(api.tools);
   }
-
   return null;
+}
+
+function writeLog(line: string) {
+  try {
+    const logPath = path.join(os.homedir(), ".zke-trading", "openclaw-plugin.log");
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${line}\n`);
+  } catch {
+    // ignore logging errors
+  }
 }
 
 async function registerAllTools(api: any): Promise<void> {
   const registerFn = resolveRegisterFn(api);
 
-  // 很关键：
-  // 在 openclaw plugins install / doctor / info 某些阶段，
-  // runtime 可能会加载插件，但不给真正的 tool registration API。
-  // 这里不能抛错，否则安装过程会炸。
   if (!registerFn) {
+    writeLog("No register function available in this runtime context.");
     return;
   }
 
@@ -54,23 +59,30 @@ async function registerAllTools(api: any): Promise<void> {
       registerFn({
         name: tool.name,
         description: tool.description,
-        // OpenClaw agent tools 文档使用 parameters
         parameters: tool.inputSchema,
         dangerous: !!tool.dangerous,
         async execute(_id: string, params: Record<string, any>) {
-          return await tool.execute(params);
+          writeLog(`TOOL_CALL ${tool.name} params=${JSON.stringify(params)}`);
+          try {
+            const result = await tool.execute(params);
+            writeLog(`TOOL_RESULT ${tool.name} result=${JSON.stringify(result)}`);
+            return result;
+          } catch (err: any) {
+            writeLog(`TOOL_ERROR ${tool.name} error=${err?.stack || err?.message || String(err)}`);
+            throw err;
+          }
         },
       })
     );
   }
+
+  writeLog(`Registered ${tools.length} tools successfully.`);
 }
 
-// 兼容官方 agent-tools 风格
 export default function (api: any) {
   void registerAllTools(api);
 }
 
-// 兼容某些 loader / checker 仍查找命名导出
 export async function register(api: any) {
   await registerAllTools(api);
 }
