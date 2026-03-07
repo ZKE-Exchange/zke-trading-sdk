@@ -7,7 +7,6 @@ echo "Installing ZKE Trading Skill"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
-PLUGIN_DIR="$HOME/.openclaw/plugins/zke-trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
 
 SPOT_URL="https://openapi.zke.com"
@@ -37,17 +36,23 @@ prompt_tty_secret() {
 }
 
 echo ""
-echo "[1/9] Checking dependencies..."
+echo "[1/10] Checking dependencies..."
 
 if ! command -v git >/dev/null 2>&1; then
     echo "ERROR: git is required."
     exit 1
 fi
 
+if ! command -v openclaw >/dev/null 2>&1; then
+    echo "ERROR: openclaw CLI is required."
+    exit 1
+fi
+
 echo "✓ git detected"
+echo "✓ openclaw detected"
 
 echo ""
-echo "[2/9] Detecting compatible Python..."
+echo "[2/10] Detecting compatible Python..."
 
 find_python() {
     for PY in python3 python3.13 python3.12 python3.11 python3.10; do
@@ -74,16 +79,13 @@ PY
     echo "✓ Using Python: $PYTHON_BIN ($PYTHON_VER)"
 else
     echo "ERROR: Python 3.10+ not found."
-    echo ""
-    echo "Please install Python 3.10 or newer."
-    echo ""
     echo "For macOS with Homebrew:"
     echo "  brew install python"
     exit 1
 fi
 
 echo ""
-echo "[3/9] Downloading or updating SDK..."
+echo "[3/10] Downloading or updating SDK..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Updating existing installation"
@@ -95,7 +97,7 @@ else
 fi
 
 echo ""
-echo "[4/9] Creating Python virtual environment..."
+echo "[4/10] Creating Python virtual environment..."
 
 if [ -d ".venv" ]; then
     echo "Existing virtual environment found. Recreating..."
@@ -109,7 +111,7 @@ source .venv/bin/activate
 echo "✓ Virtual environment created"
 
 echo ""
-echo "[5/9] Installing dependencies..."
+echo "[5/10] Installing dependencies..."
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
@@ -117,7 +119,7 @@ pip install -r requirements.txt
 echo "✓ Dependencies installed"
 
 echo ""
-echo "[6/9] API Configuration"
+echo "[6/10] API Configuration"
 echo ""
 echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
@@ -170,23 +172,39 @@ print("✓ config.json created")
 PY
 
 echo ""
-echo "[7/9] Installing OpenClaw plugin..."
+echo "[7/10] Installing OpenClaw plugin (official linked install)..."
 
-mkdir -p "$PLUGIN_DIR"
+PLUGIN_SRC="$INSTALL_DIR/openclaw"
 
-if [ -d "openclaw" ]; then
-    cp -r openclaw/* "$PLUGIN_DIR/"
-    echo "✓ Plugin installed to: $PLUGIN_DIR"
+if [ ! -f "$PLUGIN_SRC/openclaw.plugin.json" ]; then
+    echo "ERROR: plugin manifest not found: $PLUGIN_SRC/openclaw.plugin.json"
+    exit 1
+fi
+
+# Remove stale config entries if they exist; ignore errors
+openclaw plugins uninstall zke-trading >/dev/null 2>&1 || true
+
+openclaw plugins install -l "$PLUGIN_SRC"
+openclaw plugins enable zke-trading
+
+echo "✓ Plugin linked and enabled"
+
+echo ""
+echo "[8/10] Verifying plugin discovery..."
+
+if openclaw plugins list | grep -q "zke-trading"; then
+    echo "✓ zke-trading appears in plugin list"
 else
-    echo "WARNING: openclaw directory not found"
+    echo "WARNING: zke-trading not shown in plugin list yet"
+    echo "Run: openclaw plugins doctor"
 fi
 
 echo ""
-echo "[8/9] Checking existing MCP server..."
+echo "[9/10] Checking existing MCP server..."
 
-if pgrep -f "python mcp_server.py" >/dev/null 2>&1; then
+if pgrep -f "mcp_server.py" >/dev/null 2>&1; then
     echo "Existing MCP server found. Stopping..."
-    pkill -f "python mcp_server.py" || true
+    pkill -f "mcp_server.py" || true
     sleep 1
 else
     echo "No existing MCP server"
@@ -199,10 +217,12 @@ prompt_tty "Start MCP server now? (y/n): " START_MCP
 if [[ "$START_MCP" == "y" || "$START_MCP" == "Y" ]]; then
     echo "Starting MCP server..."
     nohup python mcp_server.py > "$INSTALL_DIR/mcp.log" 2>&1 &
+    MCP_PID=$!
     sleep 2
 
-    if pgrep -f "python mcp_server.py" >/dev/null 2>&1; then
+    if kill -0 "$MCP_PID" >/dev/null 2>&1; then
         echo "✓ MCP server started"
+        echo "PID: $MCP_PID"
         echo "Log file: $INSTALL_DIR/mcp.log"
     else
         echo "ERROR: MCP server failed to start"
@@ -214,7 +234,7 @@ else
 fi
 
 echo ""
-echo "[9/9] Installation complete"
+echo "[10/10] Installation complete"
 
 echo ""
 echo "======================================"
@@ -223,9 +243,6 @@ echo "======================================"
 echo ""
 echo "Install location:"
 echo "  $INSTALL_DIR"
-echo ""
-echo "Plugin location:"
-echo "  $PLUGIN_DIR"
 echo ""
 echo "Next steps:"
 echo "  1. Restart OpenClaw"
