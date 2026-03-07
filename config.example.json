@@ -1,0 +1,17 @@
+{
+  "spot": {
+    "base_url": "https://openapi.zke.com",
+    "api_key": "YOUR_SPOT_API_KEY",
+    "api_secret": "YOUR_SPOT_API_SECRET",
+    "recv_window": 5000
+  },
+  "futures": {
+    "base_url": "https://futuresopenapi.zke.com",
+    "api_key": "YOUR_FUTURES_API_KEY",
+    "api_secret": "YOUR_FUTURES_API_SECRET",
+    "recv_window": 5000
+  },
+  "ws": {
+    "url": "wss://ws.zke.com/kline-api/ws"
+  }
+}
