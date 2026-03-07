@@ -8,7 +8,7 @@ echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
-PLUGIN_DIR_NAME="zke-openclaw-plugin"
+PLUGIN_ID="zke-trading"
 
 SPOT_URL="https://openapi.zke.com"
 FUTURES_URL="https://futuresopenapi.zke.com"
@@ -45,7 +45,7 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
-    echo "ERROR: npm is required for building the OpenClaw plugin."
+    echo "ERROR: npm is required."
     exit 1
 fi
 
@@ -184,32 +184,88 @@ echo "[7/9] Building OpenClaw plugin..."
 PLUGIN_SRC="$INSTALL_DIR/openclaw-plugin"
 
 if [ ! -f "$PLUGIN_SRC/package.json" ]; then
-    echo "ERROR: plugin package.json not found: $PLUGIN_SRC/package.json"
+    echo "ERROR: package.json not found: $PLUGIN_SRC/package.json"
     exit 1
 fi
 
 if [ ! -f "$PLUGIN_SRC/openclaw.plugin.json" ]; then
-    echo "ERROR: plugin manifest not found: $PLUGIN_SRC/openclaw.plugin.json"
+    echo "ERROR: openclaw.plugin.json not found: $PLUGIN_SRC/openclaw.plugin.json"
+    exit 1
+fi
+
+if [ ! -f "$PLUGIN_SRC/skills/zke_trading/SKILL.md" ]; then
+    echo "ERROR: skills/zke_trading/SKILL.md not found"
     exit 1
 fi
 
 cd "$PLUGIN_SRC"
+rm -rf dist
 npm install
 npm run build
+
+if [ ! -f "$PLUGIN_SRC/dist/index.js" ]; then
+    echo "ERROR: Plugin build failed, dist/index.js not found"
+    exit 1
+fi
 
 echo "✓ Plugin build complete"
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
 
-openclaw plugins uninstall zke-trading >/dev/null 2>&1 || true
-openclaw plugins install -l "$PLUGIN_SRC"
-openclaw plugins enable zke-trading
+openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+sleep 1
+
+openclaw plugins install "$PLUGIN_SRC"
+openclaw plugins enable "$PLUGIN_ID"
 
 echo "✓ Plugin installed and enabled"
 
 echo ""
-echo "[9/9] Installation complete"
+echo "[9/9] Final verification..."
+
+# 把 zke-trading 加到 allowlist，去掉警告并显式信任
+OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
+mkdir -p "$HOME/.openclaw"
+
+"$PYTHON_BIN" - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json
+import sys
+from pathlib import Path
+
+cfg_path = Path(sys.argv[1])
+plugin_id = sys.argv[2]
+
+if cfg_path.exists():
+    try:
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+plugins = data.get("plugins")
+if not isinstance(plugins, dict):
+    plugins = {}
+    data["plugins"] = plugins
+
+allow = plugins.get("allow")
+if not isinstance(allow, list):
+    allow = []
+    plugins["allow"] = allow
+
+if plugin_id not in allow:
+    allow.append(plugin_id)
+
+cfg_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+print("✓ Updated OpenClaw allowlist")
+PY
+
+if openclaw plugins info "$PLUGIN_ID" >/dev/null 2>&1; then
+    echo "✓ Plugin verification passed"
+else
+    echo "WARNING: Plugin installed but verification returned non-zero"
+fi
 
 echo ""
 echo "======================================"
@@ -223,15 +279,16 @@ echo "Plugin source:"
 echo "  $PLUGIN_SRC"
 echo ""
 echo "Next steps:"
-echo "  1. Restart OpenClaw"
-echo "  2. Test prompts:"
+echo "  1. Completely restart OpenClaw"
+echo "  2. Open a NEW chat/session"
+echo "  3. Test prompts:"
 echo "     Check BTC price on ZKE"
 echo "     Show my USDT balance on ZKE"
 echo "     Show my futures positions on ZKE"
 echo ""
-echo "Plugin diagnostics:"
+echo "Diagnostics:"
 echo "  openclaw plugins list"
-echo "  openclaw plugins info zke-trading"
+echo "  openclaw plugins info $PLUGIN_ID"
 echo "  openclaw plugins doctor"
 echo ""
 echo "======================================"
