@@ -5,6 +5,9 @@
   "description": "ZKE Exchange tools for spot, futures and wallet operations via local Python SDK.",
   "author": "ZKE Exchange",
   "entry": "dist/index.js",
+  "skills": [
+    "skills/zke_trading"
+  ],
   "configSchema": {
     "type": "object",
     "properties": {
