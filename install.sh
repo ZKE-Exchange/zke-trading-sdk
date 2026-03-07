@@ -33,7 +33,7 @@ find_python() {
         if command -v "$PY" >/dev/null 2>&1; then
             OK=$("$PY" - << 'PY'
 import sys
-print("yes" if sys.version_info >= (3, 10) else "no")
+print("yes" if sys.version_info >= (3,10) else "no")
 PY
 )
             if [ "$OK" = "yes" ]; then
@@ -55,11 +55,10 @@ PY
 else
     echo "ERROR: Python 3.10+ not found."
     echo ""
-    echo "Please install Python 3.10 or newer, then rerun this installer."
+    echo "Please install Python 3.10 or newer."
     echo ""
     echo "For macOS with Homebrew:"
     echo "  brew install python"
-    echo ""
     exit 1
 fi
 
@@ -79,12 +78,11 @@ echo ""
 echo "[4/9] Creating Python virtual environment..."
 
 if [ -d ".venv" ]; then
-    echo "Existing virtual environment found. Recreating with $PYTHON_BIN ..."
+    echo "Existing virtual environment found. Recreating..."
     rm -rf .venv
 fi
 
 "$PYTHON_BIN" -m venv .venv
-# shellcheck disable=SC1091
 source .venv/bin/activate
 
 echo "✓ Virtual environment created"
@@ -111,36 +109,35 @@ echo ""
 echo ""
 echo "Generating config.json..."
 
-export INSTALL_DIR SPOT_URL FUTURES_URL WS_URL RECV_WINDOW API_KEY API_SECRET
-
-python << 'PY'
+"$PYTHON_BIN" << PY
 import json
-import os
 from pathlib import Path
 
-install_dir = Path(os.environ["INSTALL_DIR"])
+install_dir = Path("$INSTALL_DIR")
+
 config = {
     "spot": {
-        "base_url": os.environ["SPOT_URL"],
-        "api_key": os.environ["API_KEY"],
-        "api_secret": os.environ["API_SECRET"],
-        "recv_window": int(os.environ["RECV_WINDOW"]),
+        "base_url": "$SPOT_URL",
+        "api_key": "$API_KEY",
+        "api_secret": "$API_SECRET",
+        "recv_window": $RECV_WINDOW
     },
     "futures": {
-        "base_url": os.environ["FUTURES_URL"],
-        "api_key": os.environ["API_KEY"],
-        "api_secret": os.environ["API_SECRET"],
-        "recv_window": int(os.environ["RECV_WINDOW"]),
+        "base_url": "$FUTURES_URL",
+        "api_key": "$API_KEY",
+        "api_secret": "$API_SECRET",
+        "recv_window": $RECV_WINDOW
     },
     "ws": {
-        "url": os.environ["WS_URL"],
-    },
+        "url": "$WS_URL"
+    }
 }
-with open(install_dir / "config.json", "w", encoding="utf-8") as f:
-    json.dump(config, f, ensure_ascii=False, indent=2)
-PY
 
-echo "✓ config.json created"
+with open(install_dir / "config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2)
+
+print("✓ config.json created")
+PY
 
 echo ""
 echo "[7/9] Installing OpenClaw plugin..."
@@ -201,7 +198,7 @@ echo "  $PLUGIN_DIR"
 echo ""
 echo "Next steps:"
 echo "  1. Restart OpenClaw"
-echo "  2. Try prompts like:"
+echo "  2. Try prompts:"
 echo "     Check BTC price on ZKE"
 echo "     Show my USDT balance on ZKE"
 echo ""
