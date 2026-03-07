@@ -3,19 +3,14 @@ import { createSpotTools } from "./tools/spot.js";
 import { createFuturesTools } from "./tools/futures.js";
 import { createWalletTools } from "./tools/wallet.js";
 
-/**
- * 兼容层：
- * 不同 OpenClaw 版本公开的 runtime API 可能略有差异。
- * 这里只把差异收敛到 registerTool()。
- */
 async function registerTool(api: any, tool: ToolSpec) {
-  const register =
+  const registerFn =
     api?.registerAgentTool ||
-    api?.agentTools?.register ||
     api?.tools?.registerAgentTool ||
+    api?.agentTools?.register ||
     api?.tools?.register;
 
-  if (!register) {
+  if (typeof registerFn !== "function") {
     throw new Error(
       "Could not find an agent tool registration function on the OpenClaw plugin runtime API."
     );
@@ -26,11 +21,12 @@ async function registerTool(api: any, tool: ToolSpec) {
     description: tool.description,
     dangerous: !!tool.dangerous,
     inputSchema: tool.inputSchema,
-    execute: async (input: Record<string, any>, ctx?: any) =>
-      await tool.execute(input, ctx)
+    execute: async (input: Record<string, any>, ctx?: any) => {
+      return await tool.execute(input, ctx);
+    }
   };
 
-  return await register.call(api?.agentTools || api?.tools || api, payload);
+  await registerFn.call(api?.tools || api?.agentTools || api, payload);
 }
 
 function buildTools(config?: PluginConfig): ToolSpec[] {
@@ -41,7 +37,7 @@ function buildTools(config?: PluginConfig): ToolSpec[] {
   ];
 }
 
-export async function setup(api: any) {
+export async function register(api: any) {
   const config: PluginConfig =
     api?.config ||
     api?.getConfig?.() ||
@@ -54,6 +50,11 @@ export async function setup(api: any) {
   }
 }
 
+export async function activate(api: any) {
+  return register(api);
+}
+
 export default {
-  setup
+  register,
+  activate
 };
