@@ -1,5 +1,5 @@
 {
-  "name": "zke-openclaw-plugin",
+  "name": "zke-trading",
   "version": "1.0.0",
   "private": true,
   "description": "OpenClaw plugin for ZKE Exchange trading tools",
@@ -9,6 +9,11 @@
     "dist",
     "openclaw.plugin.json"
   ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist"
