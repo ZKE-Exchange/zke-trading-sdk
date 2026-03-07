@@ -3,32 +3,6 @@ import { createSpotTools } from "./tools/spot.js";
 import { createFuturesTools } from "./tools/futures.js";
 import { createWalletTools } from "./tools/wallet.js";
 
-async function registerTool(api: any, tool: ToolSpec) {
-  const registerFn =
-    api?.registerAgentTool ||
-    api?.tools?.registerAgentTool ||
-    api?.agentTools?.register ||
-    api?.tools?.register;
-
-  if (typeof registerFn !== "function") {
-    throw new Error(
-      "Could not find an agent tool registration function on the OpenClaw plugin runtime API."
-    );
-  }
-
-  const payload = {
-    name: tool.name,
-    description: tool.description,
-    dangerous: !!tool.dangerous,
-    inputSchema: tool.inputSchema,
-    execute: async (input: Record<string, any>, ctx?: any) => {
-      return await tool.execute(input, ctx);
-    }
-  };
-
-  await registerFn.call(api?.tools || api?.agentTools || api, payload);
-}
-
 function buildTools(config?: PluginConfig): ToolSpec[] {
   return [
     ...createSpotTools(config),
@@ -37,7 +11,7 @@ function buildTools(config?: PluginConfig): ToolSpec[] {
   ];
 }
 
-export async function register(api: any) {
+export default function (api: any) {
   const config: PluginConfig =
     api?.config ||
     api?.getConfig?.() ||
@@ -46,15 +20,13 @@ export async function register(api: any) {
   const tools = buildTools(config);
 
   for (const tool of tools) {
-    await registerTool(api, tool);
+    api.registerTool({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
+      async execute(_id: string, params: Record<string, any>) {
+        return await tool.execute(params);
+      }
+    });
   }
 }
-
-export async function activate(api: any) {
-  return register(api);
-}
-
-export default {
-  register,
-  activate
-};
