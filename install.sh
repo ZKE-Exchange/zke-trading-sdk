@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 echo "======================================"
 echo "Installing ZKE Trading Skill"
@@ -14,6 +14,27 @@ SPOT_URL="https://openapi.zke.com"
 FUTURES_URL="https://futuresopenapi.zke.com"
 WS_URL="wss://ws.zke.com/kline-api/ws"
 RECV_WINDOW="5000"
+
+prompt_tty() {
+    local prompt="$1"
+    local __resultvar="$2"
+    local value
+    printf "%s" "$prompt" > /dev/tty
+    IFS= read -r value < /dev/tty
+    printf -v "$__resultvar" '%s' "$value"
+}
+
+prompt_tty_secret() {
+    local prompt="$1"
+    local __resultvar="$2"
+    local value
+    printf "%s" "$prompt" > /dev/tty
+    stty -echo < /dev/tty
+    IFS= read -r value < /dev/tty
+    stty echo < /dev/tty
+    printf "\n" > /dev/tty
+    printf -v "$__resultvar" '%s' "$value"
+}
 
 echo ""
 echo "[1/9] Checking dependencies..."
@@ -31,12 +52,11 @@ echo "[2/9] Detecting compatible Python..."
 find_python() {
     for PY in python3 python3.13 python3.12 python3.11 python3.10; do
         if command -v "$PY" >/dev/null 2>&1; then
-            OK=$("$PY" - << 'PY'
+            if "$PY" - << 'PY' >/dev/null 2>&1
 import sys
-print("yes" if sys.version_info >= (3,10) else "no")
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
 PY
-)
-            if [ "$OK" = "yes" ]; then
+            then
                 echo "$PY"
                 return 0
             fi
@@ -45,12 +65,12 @@ PY
     return 1
 }
 
-if PYTHON_BIN=$(find_python); then
-    PYTHON_VER=$("$PYTHON_BIN" - << 'PY'
+if PYTHON_BIN="$(find_python)"; then
+    PYTHON_VER="$("$PYTHON_BIN" - << 'PY'
 import sys
 print(".".join(map(str, sys.version_info[:3])))
 PY
-)
+)"
     echo "✓ Using Python: $PYTHON_BIN ($PYTHON_VER)"
 else
     echo "ERROR: Python 3.10+ not found."
@@ -83,6 +103,7 @@ if [ -d ".venv" ]; then
 fi
 
 "$PYTHON_BIN" -m venv .venv
+# shellcheck disable=SC1091
 source .venv/bin/activate
 
 echo "✓ Virtual environment created"
@@ -102,39 +123,48 @@ echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
 echo ""
 
-read -rp "Enter ZKE API Key: " API_KEY
-read -rsp "Enter ZKE API Secret: " API_SECRET
-echo ""
+API_KEY=""
+API_SECRET=""
+
+prompt_tty "Enter ZKE API Key: " API_KEY
+prompt_tty_secret "Enter ZKE API Secret: " API_SECRET
+
+if [ -z "$API_KEY" ] || [ -z "$API_SECRET" ]; then
+    echo "ERROR: API key and secret cannot be empty."
+    exit 1
+fi
 
 echo ""
 echo "Generating config.json..."
 
-"$PYTHON_BIN" << PY
+"$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$API_KEY" "$API_SECRET" << 'PY'
 import json
+import sys
 from pathlib import Path
 
-install_dir = Path("$INSTALL_DIR")
+install_dir, spot_url, futures_url, ws_url, recv_window, api_key, api_secret = sys.argv[1:]
 
 config = {
     "spot": {
-        "base_url": "$SPOT_URL",
-        "api_key": "$API_KEY",
-        "api_secret": "$API_SECRET",
-        "recv_window": $RECV_WINDOW
+        "base_url": spot_url,
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "recv_window": int(recv_window),
     },
     "futures": {
-        "base_url": "$FUTURES_URL",
-        "api_key": "$API_KEY",
-        "api_secret": "$API_SECRET",
-        "recv_window": $RECV_WINDOW
+        "base_url": futures_url,
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "recv_window": int(recv_window),
     },
     "ws": {
-        "url": "$WS_URL"
-    }
+        "url": ws_url,
+    },
 }
 
-with open(install_dir / "config.json", "w", encoding="utf-8") as f:
-    json.dump(config, f, indent=2)
+Path(install_dir).mkdir(parents=True, exist_ok=True)
+with open(Path(install_dir) / "config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, ensure_ascii=False, indent=2)
 
 print("✓ config.json created")
 PY
@@ -163,7 +193,8 @@ else
 fi
 
 echo ""
-read -rp "Start MCP server now? (y/n): " START_MCP
+START_MCP=""
+prompt_tty "Start MCP server now? (y/n): " START_MCP
 
 if [[ "$START_MCP" == "y" || "$START_MCP" == "Y" ]]; then
     echo "Starting MCP server..."
