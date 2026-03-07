@@ -1,7 +1,7 @@
 ZKE Trading SDK
 
 Official open source trading toolkit for ZKE Exchange.
-
+Run `python main.py ticker BTCUSDT` to get the price.
 This project provides a complete Python SDK + CLI + MCP server for interacting with the ZKE Exchange API, including:
 	•	Spot trading
 	•	Futures trading
