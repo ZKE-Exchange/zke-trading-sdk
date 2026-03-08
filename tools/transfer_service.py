@@ -174,6 +174,9 @@ def query_transfer_history(
     norm_from = _normalize_account_type(from_account) if from_account else None
     norm_to = _normalize_account_type(to_account) if to_account else None
 
+    if not norm_from or not norm_to:
+        raise ValueError("查询划转记录时必须提供 from_account 和 to_account，例如 EXCHANGE FUTURE。")
+
     result = api.asset_transfer_query(
         transfer_id=str(transfer_id) if transfer_id else None,
         coin_symbol=str(coin_symbol).upper() if coin_symbol else None,
