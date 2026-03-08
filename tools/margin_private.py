@@ -7,12 +7,12 @@ class MarginPrivateApi:
     """
     杠杆私有接口封装
 
-    当前按以下接口封装：
-    - POST /sapi/v1/margin/order
-    - GET  /sapi/v1/margin/order
-    - POST /sapi/v1/margin/cancel
-    - GET  /sapi/v1/margin/openOrders
-    - GET  /sapi/v1/margin/myTrades
+    新版文档：
+    - POST /sapi/v2/margin/order
+    - GET  /sapi/v2/margin/order
+    - POST /sapi/v2/margin/cancel
+    - GET  /sapi/v2/margin/openOrders
+    - GET  /sapi/v2/margin/myTrades
     """
 
     def __init__(self, client: ZKEClient):
@@ -26,7 +26,6 @@ class MarginPrivateApi:
         volume,
         price=None,
         new_client_order_id: Optional[str] = None,
-        recv_window: Optional[int] = None,
     ):
         body: Dict[str, Any] = {
             "symbol": symbol,
@@ -41,10 +40,7 @@ class MarginPrivateApi:
         if new_client_order_id:
             body["newClientOrderId"] = new_client_order_id
 
-        if recv_window is not None:
-            body["recvWindow"] = recv_window
-
-        return self.client.request("POST", "/sapi/v1/margin/order", body=body, signed=True)
+        return self.client.request("POST", "/sapi/v2/margin/order", body=body, signed=True)
 
     def order_query(
         self,
@@ -62,7 +58,7 @@ class MarginPrivateApi:
         if new_client_order_id:
             params["newClientOrderId"] = new_client_order_id
 
-        return self.client.request("GET", "/sapi/v1/margin/order", params=params, signed=True)
+        return self.client.request("GET", "/sapi/v2/margin/order", params=params, signed=True)
 
     def cancel_order(
         self,
@@ -80,7 +76,7 @@ class MarginPrivateApi:
         if new_client_order_id:
             body["newClientOrderId"] = new_client_order_id
 
-        return self.client.request("POST", "/sapi/v1/margin/cancel", body=body, signed=True)
+        return self.client.request("POST", "/sapi/v2/margin/cancel", body=body, signed=True)
 
     def open_orders(self, symbol: str, limit: Optional[int] = None):
         params: Dict[str, Any] = {
@@ -90,7 +86,7 @@ class MarginPrivateApi:
         if limit is not None:
             params["limit"] = limit
 
-        return self.client.request("GET", "/sapi/v1/margin/openOrders", params=params, signed=True)
+        return self.client.request("GET", "/sapi/v2/margin/openOrders", params=params, signed=True)
 
     def my_trades(
         self,
@@ -108,4 +104,4 @@ class MarginPrivateApi:
         if from_id is not None:
             params["fromId"] = from_id
 
-        return self.client.request("GET", "/sapi/v1/margin/myTrades", params=params, signed=True)
+        return self.client.request("GET", "/sapi/v2/margin/myTrades", params=params, signed=True)
