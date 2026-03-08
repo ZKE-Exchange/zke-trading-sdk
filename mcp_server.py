@@ -3,7 +3,7 @@
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from mcp.server.fastmcp import FastMCP
 
@@ -22,6 +22,7 @@ from tools import futures_account_service
 from tools import futures_order_service
 from tools import margin_order_service
 from tools import withdraw_service
+from tools import transfer_service
 from tools.field_mapper import map_side, map_position_type, map_order_status
 from tools.ws_client import ZKEWebSocketClient
 from tools.ws_parser import normalize_ws_message
@@ -201,6 +202,28 @@ def get_spot_klines(symbol: str, interval: str = "1day") -> Dict[str, Any]:
 
 
 @mcp.tool()
+def get_spot_account() -> Dict[str, Any]:
+    """
+    获取现货账户原始资产数据。
+    """
+    return SPOT_PRIVATE.account()
+
+
+@mcp.tool()
+def get_spot_nonzero_balances() -> Dict[str, Any]:
+    """
+    获取现货非零余额资产列表。
+    """
+    account_data = SPOT_PRIVATE.account()
+    balances = account_service.extract_account_balances(account_data)
+    nonzero = account_service.filter_nonzero_balances(balances)
+    return {
+        "balances": nonzero,
+        "count": len(nonzero),
+    }
+
+
+@mcp.tool()
 def get_spot_balance(asset: str) -> Dict[str, Any]:
     """
     获取现货某个币种余额。
@@ -214,6 +237,15 @@ def get_spot_balance(asset: str) -> Dict[str, Any]:
         "free": summary.get("free"),
         "locked": summary.get("locked"),
     }
+
+
+@mcp.tool()
+def get_spot_account_by_type(account_type: str) -> Dict[str, Any]:
+    """
+    按账户类型查询现货资产。
+    account_type 例子: 1
+    """
+    return SPOT_PRIVATE.account_by_type(account_type)
 
 
 @mcp.tool()
@@ -245,6 +277,38 @@ def get_spot_my_trades(symbol: str, limit: int = 10) -> Dict[str, Any]:
         "symbol": symbol.upper(),
         "trades": trades,
         "count": len(trades),
+    }
+
+
+@mcp.tool()
+def get_spot_my_trades_v3(symbol: str, limit: int = 10) -> Dict[str, Any]:
+    """
+    获取现货某个交易对 v3 成交记录。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    raw = SPOT_PRIVATE.my_trades_v3(symbol=api_symbol, limit=limit)
+    trades = _normalize_list_result(raw)
+    return {
+        "symbol": symbol.upper(),
+        "trades": trades,
+        "count": len(trades),
+    }
+
+
+@mcp.tool()
+def get_spot_history_orders(symbol: str, limit: int = 10) -> Dict[str, Any]:
+    """
+    获取现货某个交易对历史订单。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    raw = SPOT_PRIVATE.history_orders(symbol=api_symbol, limit=limit)
+    orders = _normalize_list_result(raw)
+    return {
+        "symbol": symbol.upper(),
+        "orders": orders,
+        "count": len(orders),
     }
 
 
@@ -305,6 +369,63 @@ def cancel_spot_order(symbol: str, order_id: str) -> Dict[str, Any]:
         "symbol": symbol.upper(),
         "order_id": order_id,
         "result": result,
+    }
+
+
+# =========================================================
+# Spot Transfer
+# =========================================================
+
+@mcp.tool()
+def transfer_spot_to_futures(coin_symbol: str, amount: str) -> Dict[str, Any]:
+    """
+    现货账户划转到合约账户。
+    coin_symbol 例子: USDT
+    """
+    return transfer_service.transfer_spot_to_futures(
+        SPOT_PRIVATE,
+        coin_symbol,
+        amount,
+    )
+
+
+@mcp.tool()
+def transfer_futures_to_spot(coin_symbol: str, amount: str) -> Dict[str, Any]:
+    """
+    合约账户划转回现货账户。
+    coin_symbol 例子: USDT
+    """
+    return transfer_service.transfer_futures_to_spot(
+        SPOT_PRIVATE,
+        coin_symbol,
+        amount,
+    )
+
+
+@mcp.tool()
+def get_transfer_history(
+    coin_symbol: str = "",
+    from_account: str = "",
+    to_account: str = "",
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """
+    查询现货/合约划转记录。
+    from_account / to_account 可用 EXCHANGE / FUTURE
+    """
+    rows = transfer_service.query_transfer_history(
+        api=SPOT_PRIVATE,
+        coin_symbol=coin_symbol if coin_symbol else None,
+        from_account=from_account if from_account else None,
+        to_account=to_account if to_account else None,
+        limit=limit,
+    )
+    return {
+        "coin_symbol": coin_symbol,
+        "from_account": from_account,
+        "to_account": to_account,
+        "records": rows,
+        "count": len(rows),
     }
 
 
