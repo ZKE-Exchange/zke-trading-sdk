@@ -8,6 +8,7 @@ echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
+DEFAULT_BRANCH="main"
 PLUGIN_ID="zke-trading"
 
 SPOT_URL="https://openapi.zke.com"
@@ -95,13 +96,21 @@ echo ""
 echo "[3/9] Downloading or updating SDK..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "Updating existing installation"
+    echo "Existing installation detected, updating..."
     cd "$INSTALL_DIR"
-    git pull
+    git fetch --all --tags
+    git reset --hard "origin/$DEFAULT_BRANCH"
 else
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
+
+if [ ! -f "requirements.txt" ]; then
+    echo "ERROR: requirements.txt not found."
+    exit 1
+fi
+
+echo "✓ Repository ready"
 
 echo ""
 echo "[4/9] Creating Python virtual environment..."
@@ -131,39 +140,68 @@ echo ""
 echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
 echo ""
+echo "You can use separate API keys for Spot and Futures."
+echo "Press Enter on Futures API Key to reuse the Spot credentials."
+echo ""
 
-API_KEY=""
-API_SECRET=""
+SPOT_API_KEY=""
+SPOT_API_SECRET=""
+FUTURES_API_KEY=""
+FUTURES_API_SECRET=""
 
-prompt_tty "Enter ZKE API Key: " API_KEY
-prompt_tty_secret "Enter ZKE API Secret: " API_SECRET
+prompt_tty "Enter Spot API Key: " SPOT_API_KEY
+prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
 
-if [ -z "$API_KEY" ] || [ -z "$API_SECRET" ]; then
-    echo "ERROR: API key and secret cannot be empty."
+if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
+    echo "ERROR: Spot API key and secret cannot be empty."
     exit 1
+fi
+
+echo ""
+prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
+if [ -z "$FUTURES_API_KEY" ]; then
+    FUTURES_API_KEY="$SPOT_API_KEY"
+    FUTURES_API_SECRET="$SPOT_API_SECRET"
+    echo "✓ Reusing Spot API credentials for Futures"
+else
+    prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
+    if [ -z "$FUTURES_API_SECRET" ]; then
+        echo "ERROR: Futures API secret cannot be empty when Futures API key is provided."
+        exit 1
+    fi
 fi
 
 echo ""
 echo "Generating config.json..."
 
-"$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$API_KEY" "$API_SECRET" << 'PY'
+"$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
 import json
 import sys
 from pathlib import Path
 
-install_dir, spot_url, futures_url, ws_url, recv_window, api_key, api_secret = sys.argv[1:]
+(
+    install_dir,
+    spot_url,
+    futures_url,
+    ws_url,
+    recv_window,
+    spot_api_key,
+    spot_api_secret,
+    futures_api_key,
+    futures_api_secret,
+) = sys.argv[1:]
 
 config = {
     "spot": {
         "base_url": spot_url,
-        "api_key": api_key,
-        "api_secret": api_secret,
+        "api_key": spot_api_key,
+        "api_secret": spot_api_secret,
         "recv_window": int(recv_window),
     },
     "futures": {
         "base_url": futures_url,
-        "api_key": api_key,
-        "api_secret": api_secret,
+        "api_key": futures_api_key,
+        "api_secret": futures_api_secret,
         "recv_window": int(recv_window),
     },
     "ws": {
@@ -183,6 +221,11 @@ echo "[7/9] Building OpenClaw plugin..."
 
 PLUGIN_SRC="$INSTALL_DIR/openclaw-plugin"
 
+if [ ! -d "$PLUGIN_SRC" ]; then
+    echo "ERROR: Plugin source directory not found: $PLUGIN_SRC"
+    exit 1
+fi
+
 if [ ! -f "$PLUGIN_SRC/package.json" ]; then
     echo "ERROR: package.json not found: $PLUGIN_SRC/package.json"
     exit 1
@@ -199,7 +242,8 @@ if [ ! -f "$PLUGIN_SRC/skills/zke_trading/SKILL.md" ]; then
 fi
 
 cd "$PLUGIN_SRC"
-rm -rf dist
+rm -rf dist node_modules
+
 npm install
 npm run build
 
@@ -224,7 +268,6 @@ echo "✓ Plugin installed and enabled"
 echo ""
 echo "[9/9] Final verification..."
 
-# 把 zke-trading 加到 allowlist，去掉警告并显式信任
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 mkdir -p "$HOME/.openclaw"
 
@@ -268,6 +311,14 @@ else
 fi
 
 echo ""
+echo "Running basic Python validation..."
+cd "$INSTALL_DIR"
+source .venv/bin/activate
+python -m py_compile main.py
+python -m py_compile mcp_server.py
+echo "✓ Python validation passed"
+
+echo ""
 echo "======================================"
 echo "ZKE OpenClaw Plugin installed"
 echo "======================================"
@@ -285,6 +336,7 @@ echo "  3. Test prompts:"
 echo "     Check BTC price on ZKE"
 echo "     Show my USDT balance on ZKE"
 echo "     Show my futures positions on ZKE"
+echo "     Place a BTC limit order on ZKE"
 echo ""
 echo "Diagnostics:"
 echo "  openclaw plugins list"
