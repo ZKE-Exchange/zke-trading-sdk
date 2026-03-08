@@ -45,7 +45,19 @@ def _fmt_futures_status(status):
         s = int(status)
         return mapping.get(s, str(status))
     except Exception:
-        return str(status)
+        s = str(status).strip().upper()
+        text_mapping = {
+            "INIT": "初始",
+            "NEW": "新订单",
+            "FILLED": "完全成交",
+            "PARTIALLY_FILLED": "部分成交",
+            "PART_FILLED": "部分成交",
+            "CANCELED": "已取消",
+            "CANCELLED": "已取消",
+            "REJECTED": "拒单",
+            "ERROR": "异常",
+        }
+        return text_mapping.get(s, str(status))
 
 
 def _fmt_position_type(position_type):
@@ -57,6 +69,11 @@ def _fmt_position_type(position_type):
         v = int(position_type)
         return mapping.get(v, str(position_type))
     except Exception:
+        s = str(position_type).strip().lower()
+        if s == "cross":
+            return "全仓"
+        if s == "isolated":
+            return "逐仓"
         return str(position_type)
 
 
@@ -67,6 +84,10 @@ def _fmt_side(side):
     if s == "BUY":
         return "多"
     if s == "SELL":
+        return "空"
+    if s == "LONG":
+        return "多"
+    if s == "SHORT":
         return "空"
     return s
 
@@ -124,8 +145,8 @@ def print_account_balances_pretty(balances):
 def print_ticker_pretty(symbol, data):
     print(f"交易对: {_fmt_symbol_display(symbol)}")
     print(f"最新价: {data.get('last', '-')}")
-    print(f"买一: {data.get('buy', '-')}")
-    print(f"卖一: {data.get('sell', '-')}")
+    print(f"买一: {data.get('bidPrice', data.get('buy', '-'))}")
+    print(f"卖一: {data.get('askPrice', data.get('sell', '-'))}")
     print(f"24h最高: {data.get('high', '-')}")
     print(f"24h最低: {data.get('low', '-')}")
     print(f"24h成交量: {data.get('vol', '-')}")
@@ -249,8 +270,8 @@ def print_my_trades_pretty(display_symbol, trades):
 def print_futures_ticker_pretty(contract, data):
     print(f"合约: {_fmt_contract_display(contract)}")
     print(f"最新价: {data.get('last', '-')}")
-    print(f"买一: {data.get('buy', '-')}")
-    print(f"卖一: {data.get('sell', '-')}")
+    print(f"买一: {data.get('buy', data.get('bidPrice', '-'))}")
+    print(f"卖一: {data.get('sell', data.get('askPrice', '-'))}")
     print(f"24h最高: {data.get('high', '-')}")
     print(f"24h最低: {data.get('low', '-')}")
     print(f"24h成交量: {data.get('vol', '-')}")
@@ -294,15 +315,15 @@ def print_futures_positions_pretty(positions):
     print()
 
     for p in positions:
-        contract = p.get("_contractName", "-")
+        contract = p.get("_contractName", p.get("contract", "-"))
         side = _fmt_side(p.get("side", "-"))
-        pos_type = _fmt_position_type(p.get("positionType", "-"))
+        pos_type = _fmt_position_type(p.get("positionType", p.get("position_type", "-")))
         volume = p.get("volume", 0)
-        open_price = p.get("openPrice", "-")
-        avg_price = p.get("avgPrice", "-")
-        leverage = p.get("leverageLevel", "-")
-        unrealized = p.get("unRealizedAmount", p.get("unrealizedAmount", "-"))
-        margin_coin = p.get("_marginCoin", "-")
+        open_price = p.get("openPrice", p.get("open_price", "-"))
+        avg_price = p.get("avgPrice", p.get("avg_price", "-"))
+        leverage = p.get("leverageLevel", p.get("leverage", "-"))
+        unrealized = p.get("unRealizedAmount", p.get("unrealizedAmount", p.get("unrealized_pnl", "-")))
+        margin_coin = p.get("_marginCoin", p.get("margin_coin", "-"))
 
         print(f"合约: {contract}")
         print(f"方向: {side}")
@@ -336,16 +357,14 @@ def print_futures_my_trades_pretty(trades):
     print()
 
     for t in trade_list:
-        contract = t.get("contractName", "-")
+        contract = t.get("contract") or t.get("contractName") or "-"
         price = t.get("price", "-")
         qty = t.get("qty", t.get("volume", "-"))
-        side = _fmt_side(t.get("side", "-"))
+        side = str(t.get("side", "-")).upper()
         fee = t.get("fee", "-")
         ts = t.get("time")
 
-        base_symbol = str(contract).replace("E-", "").replace("H-", "").replace("S-", "").replace("-USDT", "")
-
-        print(f"{side} {qty}张 {base_symbol} 永续合约")
+        print(f"{side} {qty}张 {contract}")
         print(f"价格: {price} USDT")
         print(f"手续费: {fee} USDT")
         print(f"时间: {_fmt_time_ms(ts)}")
@@ -373,16 +392,16 @@ def print_futures_order_history_pretty(orders):
     print()
 
     for o in order_list:
-        contract = o.get("contractName", "-")
+        contract = o.get("contractName", o.get("contract", "-"))
         side = _fmt_side(o.get("side", "-"))
         price = o.get("price", "-")
         volume = o.get("volume", "-")
         status = _fmt_futures_status(o.get("status", "-"))
-        open_or_close = _fmt_open_close(o.get("openOrClose", "-"))
-        deal_volume = o.get("dealVolume", "-")
-        pos_type = _fmt_position_type(o.get("positionType", "-"))
-        order_type = _fmt_order_type(o.get("type", "-"))
-        ctime = o.get("ctimeMs", o.get("ctime"))
+        open_or_close = _fmt_open_close(o.get("openOrClose", o.get("action", "-")))
+        deal_volume = o.get("dealVolume", o.get("deal_volume", "-"))
+        pos_type = _fmt_position_type(o.get("positionType", o.get("position_mode", "-")))
+        order_type = _fmt_order_type(o.get("type", o.get("order_type", "-")))
+        ctime = o.get("ctimeMs", o.get("ctime", o.get("time")))
 
         print(f"合约: {contract}")
         print(f"方向: {side}")
@@ -418,14 +437,14 @@ def print_futures_profit_pretty(records):
     print()
 
     for r in record_list:
-        contract = r.get("contractName", "-")
+        contract = r.get("contractName", r.get("contract", "-"))
         side = _fmt_side(r.get("side", "-"))
-        profit = r.get("closeProfit", "-")
-        fee = r.get("tradeFee", "-")
-        leverage = r.get("leverageLevel", "-")
-        open_price = r.get("openPrice", "-")
-        pos_type = _fmt_position_type(r.get("positionType", "-"))
-        ctime = r.get("ctime")
+        profit = r.get("closeProfit", r.get("profit", "-"))
+        fee = r.get("tradeFee", r.get("fee", "-"))
+        leverage = r.get("leverageLevel", r.get("leverage", "-"))
+        open_price = r.get("openPrice", r.get("open_price", "-"))
+        pos_type = _fmt_position_type(r.get("positionType", r.get("position_mode", "-")))
+        ctime = r.get("ctime", r.get("time"))
 
         print(f"合约: {contract}")
         print(f"方向: {side}")
