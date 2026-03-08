@@ -91,7 +91,7 @@ def print_help():
         "  python3 main.py create-order BTCUSDT BUY LIMIT 0.001 10000\n"
         "  python3 main.py cancel-order BTCUSDT <orderId>\n"
         "\n提现:\n"
-        "  python3 main.py withdraw USDTBSC 0xabc... 20\n"
+        "  python3 main.py withdraw USDTBSC 0xabc... 20 [memo]\n"
         "  python3 main.py withdraw-history\n"
         "  python3 main.py withdraw-history USDTBSC 20\n"
         "\n杠杆:\n"
@@ -106,6 +106,7 @@ def print_help():
         "  python3 main.py futures-contracts\n"
         "  python3 main.py futures-ticker E-BTC-USDT\n"
         "  python3 main.py futures-ticker-pretty E-BTC-USDT\n"
+        "  python3 main.py futures-ticker-all\n"
         "  python3 main.py futures-depth E-BTC-USDT 20\n"
         "  python3 main.py futures-depth-pretty E-BTC-USDT 10\n"
         "  python3 main.py futures-index E-BTC-USDT\n"
@@ -126,7 +127,9 @@ def print_help():
         "  python3 main.py futures-profit-historical E-BTC-USDT 10\n"
         "  python3 main.py futures-profit-historical-pretty E-BTC-USDT 10\n"
         "  python3 main.py futures-create-order E-BTC-USDT BUY OPEN 2 LIMIT 1 50000\n"
+        "  python3 main.py futures-condition-order E-BTC-USDT BUY OPEN 2 LIMIT 1 3UP 50000 50010\n"
         "  python3 main.py futures-cancel-order E-BTC-USDT <orderId>\n"
+        "  python3 main.py futures-cancel-all-orders [E-BTC-USDT]\n"
         "\nWebSocket:\n"
         "  python3 main.py ws-ticker BTCUSDT 30\n"
         "  python3 main.py ws-depth BTCUSDT step0 30\n"
@@ -134,6 +137,8 @@ def print_help():
         "  python3 main.py ws-trades BTCUSDT 30\n"
         "  python3 main.py ws-kline-req BTCUSDT 1min 10\n"
         "  python3 main.py ws-trade-req BTCUSDT 10\n"
+        "  python3 main.py ws-futures-position-order 30 <apiKey|token>\n"
+        "  python3 main.py ws-spot-user-data 30 <apiKey|token>\n"
     )
 
 
@@ -195,6 +200,22 @@ def main():
             symbol = sys.argv[2]
             seconds = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             ws_service.run_ws_trade_req(get_ws_url(), symbol, seconds=seconds)
+            return
+
+        if cmd == "ws-futures-position-order":
+            seconds = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            credential = sys.argv[3] if len(sys.argv) > 3 else None
+            if not credential:
+                raise ValueError("请提供 futures ws 的 apiKey 或 token。")
+            ws_service.run_futures_position_order_ws(seconds=seconds, api_key=credential)
+            return
+
+        if cmd == "ws-spot-user-data":
+            seconds = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            credential = sys.argv[3] if len(sys.argv) > 3 else None
+            if not credential:
+                raise ValueError("请提供 spot user data ws 的 apiKey 或 token。")
+            ws_service.run_spot_user_data_ws(seconds=seconds, api_key=credential)
             return
 
         # ===== 现货 =====
@@ -290,7 +311,7 @@ def main():
         if cmd == "open-orders-pretty":
             symbol = sys.argv[2]
             display_symbol = registry.get_display_symbol(symbol)
-            orders = order_service.open_orders(private_api, registry, symbol)
+            orders = order_service.open_orders(private_api, registry, symbol, limit=100)
             formatters.print_open_orders_pretty(display_symbol, orders)
             return
 
@@ -358,7 +379,7 @@ def main():
         if cmd == "cancel-order":
             symbol = sys.argv[2]
             order_id = sys.argv[3]
-            result = order_service.cancel_order(private_api, registry, symbol, order_id)
+            result = order_service.cancel_order(private_api, registry, symbol, order_id=order_id)
             pretty_print(result)
             return
 
@@ -367,16 +388,14 @@ def main():
             coin = sys.argv[2]
             address = sys.argv[3]
             amount = sys.argv[4]
-            network = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] != "" else None
-            memo = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] != "" else None
+            memo = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] != "" else None
 
             data = withdraw_service.apply_withdraw(
                 private_api,
                 coin,
                 address,
                 amount,
-                network,
-                memo
+                memo=memo
             )
 
             pretty_print(data)
@@ -388,8 +407,8 @@ def main():
 
             rows = withdraw_service.withdraw_history(
                 private_api,
-                coin,
-                limit
+                coin=coin,
+                limit=limit
             )
 
             pretty_print(rows)
@@ -480,6 +499,10 @@ def main():
             symbol = sys.argv[2]
             contract_name, data = futures_service.get_ticker_pretty_data(futures_public, futures_registry, symbol)
             formatters.print_futures_ticker_pretty(contract_name, data)
+            return
+
+        if cmd == "futures-ticker-all":
+            pretty_print(futures_service.get_ticker_all(futures_public))
             return
 
         if cmd == "futures-depth":
@@ -592,13 +615,13 @@ def main():
         if cmd == "futures-profit-historical":
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-            pretty_print(futures_order_service.profit_historical(futures_private, futures_registry, symbol, limit))
+            pretty_print(futures_order_service.profit_historical(futures_private, futures_registry, symbol, limit=limit))
             return
 
         if cmd == "futures-profit-historical-pretty":
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-            records = futures_order_service.profit_historical(futures_private, futures_registry, symbol, limit)
+            records = futures_order_service.profit_historical(futures_private, futures_registry, symbol, limit=limit)
             formatters.print_futures_profit_pretty(records)
             return
 
@@ -624,22 +647,54 @@ def main():
             )
 
             print("合约订单参数：")
-            print(f"合约: {data['contract_name']}")
+            print(f"合约: {data['contractName']}")
             print(f"方向: {data['side']}")
-            print(f"开平: {data['open_action']}")
-            print(f"仓位类型: {data['position_type']}")
-            print(f"类型: {data['order_type']}")
+            print(f"开平: {data['open']}")
+            print(f"仓位类型: {data['positionType']}")
+            print(f"类型: {data['type']}")
             print(f"数量: {data['volume']}")
             if data["price"] is not None:
                 print(f"价格: {data['price']}")
-
             pretty_print(result)
+            return
+
+        if cmd == "futures-condition-order":
+            symbol = sys.argv[2]
+            side = sys.argv[3]
+            open_action = sys.argv[4]
+            position_type = int(sys.argv[5])
+            order_type = sys.argv[6]
+            volume = sys.argv[7]
+            trigger_type = sys.argv[8]
+            trigger_price = sys.argv[9]
+            price = sys.argv[10] if len(sys.argv) > 10 else None
+
+            data, result = futures_order_service.create_condition_order(
+                futures_private,
+                futures_registry,
+                symbol,
+                side,
+                open_action,
+                position_type,
+                order_type,
+                volume,
+                trigger_type,
+                trigger_price,
+                price
+            )
+
+            pretty_print({"request": data, "result": result})
             return
 
         if cmd == "futures-cancel-order":
             symbol = sys.argv[2]
             order_id = sys.argv[3]
             pretty_print(futures_order_service.cancel_order(futures_private, futures_registry, symbol, order_id))
+            return
+
+        if cmd == "futures-cancel-all-orders":
+            symbol = sys.argv[2] if len(sys.argv) > 2 else None
+            pretty_print(futures_order_service.cancel_all_orders(futures_private, futures_registry, symbol))
             return
 
         print_help()
