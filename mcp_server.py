@@ -152,10 +152,6 @@ def _collect_ws_messages(
 
 @mcp.tool()
 def get_spot_ticker(symbol: str) -> Dict[str, Any]:
-    """
-    获取现货交易对最新行情。
-    symbol 例子: BTCUSDT
-    """
     data = market_service.get_ticker(SPOT_PUBLIC, SPOT_REGISTRY, symbol)
     return {
         "symbol": symbol.upper(),
@@ -173,10 +169,6 @@ def get_spot_ticker(symbol: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_depth(symbol: str, limit: int = 20) -> Dict[str, Any]:
-    """
-    获取现货订单簿深度。
-    symbol 例子: BTCUSDT
-    """
     data = market_service.get_depth(SPOT_PUBLIC, SPOT_REGISTRY, symbol, limit)
     return {
         "symbol": symbol.upper(),
@@ -188,10 +180,6 @@ def get_spot_depth(symbol: str, limit: int = 20) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_klines(symbol: str, interval: str = "1day") -> Dict[str, Any]:
-    """
-    获取现货K线。
-    symbol 例子: BTCUSDT
-    """
     data = market_service.get_klines(SPOT_PUBLIC, SPOT_REGISTRY, symbol, interval)
     return {
         "symbol": symbol.upper(),
@@ -203,17 +191,11 @@ def get_spot_klines(symbol: str, interval: str = "1day") -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_account() -> Dict[str, Any]:
-    """
-    获取现货账户原始资产数据。
-    """
     return SPOT_PRIVATE.account()
 
 
 @mcp.tool()
 def get_spot_nonzero_balances() -> Dict[str, Any]:
-    """
-    获取现货非零余额资产列表。
-    """
     account_data = SPOT_PRIVATE.account()
     balances = account_service.extract_account_balances(account_data)
     nonzero = account_service.filter_nonzero_balances(balances)
@@ -225,10 +207,6 @@ def get_spot_nonzero_balances() -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_balance(asset: str) -> Dict[str, Any]:
-    """
-    获取现货某个币种余额。
-    asset 例子: USDT
-    """
     account_data = SPOT_PRIVATE.account()
     balances = account_service.extract_account_balances(account_data)
     summary = account_service.get_asset_balance_summary(balances, asset)
@@ -241,19 +219,11 @@ def get_spot_balance(asset: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_account_by_type(account_type: str) -> Dict[str, Any]:
-    """
-    按账户类型查询现货资产。
-    account_type 例子: 1
-    """
     return SPOT_PRIVATE.account_by_type(account_type)
 
 
 @mcp.tool()
 def get_spot_open_orders(symbol: str, limit: int = 20) -> Dict[str, Any]:
-    """
-    获取现货某个交易对当前挂单。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     raw = SPOT_PRIVATE.open_orders(api_symbol, limit)
     orders = _normalize_list_result(raw)
@@ -266,10 +236,6 @@ def get_spot_open_orders(symbol: str, limit: int = 20) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_my_trades(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取现货某个交易对最近成交。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     raw = SPOT_PRIVATE.my_trades(api_symbol, limit)
     trades = _normalize_list_result(raw)
@@ -282,10 +248,6 @@ def get_spot_my_trades(symbol: str, limit: int = 10) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_my_trades_v3(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取现货某个交易对 v3 成交记录。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     raw = SPOT_PRIVATE.my_trades_v3(symbol=api_symbol, limit=limit)
     trades = _normalize_list_result(raw)
@@ -298,10 +260,6 @@ def get_spot_my_trades_v3(symbol: str, limit: int = 10) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_spot_history_orders(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取现货某个交易对历史订单。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     raw = SPOT_PRIVATE.history_orders(symbol=api_symbol, limit=limit)
     orders = _normalize_list_result(raw)
@@ -324,14 +282,6 @@ def create_spot_order(
     volume: str,
     price: str = ""
 ) -> Dict[str, Any]:
-    """
-    创建现货订单。
-    symbol 例子: BTCUSDT
-    side: BUY / SELL
-    order_type: LIMIT / MARKET
-    volume: 数量
-    price: LIMIT 单必填，MARKET 可留空
-    """
     p = price.strip() if isinstance(price, str) else price
     if p == "":
         p = None
@@ -354,11 +304,6 @@ def create_spot_order(
 
 @mcp.tool()
 def cancel_spot_order(symbol: str, order_id: str) -> Dict[str, Any]:
-    """
-    撤销现货订单。
-    symbol 例子: BTCUSDT
-    order_id: 订单ID
-    """
     result = order_service.cancel_order(
         SPOT_PRIVATE,
         SPOT_REGISTRY,
@@ -378,10 +323,6 @@ def cancel_spot_order(symbol: str, order_id: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def transfer_spot_to_futures(coin_symbol: str, amount: str) -> Dict[str, Any]:
-    """
-    现货账户划转到合约账户。
-    coin_symbol 例子: USDT
-    """
     return transfer_service.transfer_spot_to_futures(
         SPOT_PRIVATE,
         coin_symbol,
@@ -391,10 +332,6 @@ def transfer_spot_to_futures(coin_symbol: str, amount: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def transfer_futures_to_spot(coin_symbol: str, amount: str) -> Dict[str, Any]:
-    """
-    合约账户划转回现货账户。
-    coin_symbol 例子: USDT
-    """
     return transfer_service.transfer_futures_to_spot(
         SPOT_PRIVATE,
         coin_symbol,
@@ -409,10 +346,6 @@ def get_transfer_history(
     to_account: str = "",
     limit: int = 20,
 ) -> Dict[str, Any]:
-    """
-    查询现货/合约划转记录。
-    from_account / to_account 可用 EXCHANGE / FUTURE
-    """
     rows = transfer_service.query_transfer_history(
         api=SPOT_PRIVATE,
         coin_symbol=coin_symbol if coin_symbol else None,
@@ -441,10 +374,6 @@ def create_withdraw(
     network: str = "",
     memo: str = ""
 ) -> Dict[str, Any]:
-    """
-    发起提现。
-    network 和 memo 可留空。
-    """
     result = withdraw_service.apply_withdraw(
         SPOT_PRIVATE,
         coin,
@@ -453,7 +382,6 @@ def create_withdraw(
         network if network else None,
         memo if memo else None
     )
-
     return result
 
 
@@ -462,10 +390,6 @@ def get_withdraw_history(
     coin: str = "",
     limit: int = 20
 ) -> Dict[str, Any]:
-    """
-    查询提现记录。
-    coin 可留空。
-    """
     rows = withdraw_service.withdraw_history(
         SPOT_PRIVATE,
         coin if coin else None,
@@ -491,14 +415,6 @@ def create_margin_order(
     volume: str,
     price: str = ""
 ) -> Dict[str, Any]:
-    """
-    创建杠杆订单。
-    symbol 例子: BTCUSDT
-    side: BUY / SELL
-    order_type: LIMIT / MARKET
-    volume: 数量
-    price: LIMIT 单必填，MARKET 可留空
-    """
     p = price.strip() if isinstance(price, str) else price
     if p == "":
         p = None
@@ -521,11 +437,6 @@ def create_margin_order(
 
 @mcp.tool()
 def get_margin_order(symbol: str, order_id: str) -> Dict[str, Any]:
-    """
-    查询杠杆订单。
-    symbol 例子: BTCUSDT
-    order_id: 订单ID
-    """
     result = margin_order_service.order_query(
         MARGIN_PRIVATE,
         SPOT_REGISTRY,
@@ -537,11 +448,6 @@ def get_margin_order(symbol: str, order_id: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def cancel_margin_order(symbol: str, order_id: str) -> Dict[str, Any]:
-    """
-    撤销杠杆订单。
-    symbol 例子: BTCUSDT
-    order_id: 订单ID
-    """
     result = margin_order_service.cancel_order(
         MARGIN_PRIVATE,
         SPOT_REGISTRY,
@@ -557,10 +463,6 @@ def cancel_margin_order(symbol: str, order_id: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_margin_open_orders(symbol: str, limit: int = 100) -> Dict[str, Any]:
-    """
-    获取杠杆当前挂单。
-    symbol 例子: BTCUSDT
-    """
     rows = margin_order_service.open_orders(
         MARGIN_PRIVATE,
         SPOT_REGISTRY,
@@ -576,10 +478,6 @@ def get_margin_open_orders(symbol: str, limit: int = 100) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_margin_my_trades(symbol: str, limit: int = 100) -> Dict[str, Any]:
-    """
-    获取杠杆成交记录。
-    symbol 例子: BTCUSDT
-    """
     rows = margin_order_service.my_trades(
         MARGIN_PRIVATE,
         SPOT_REGISTRY,
@@ -599,10 +497,6 @@ def get_margin_my_trades(symbol: str, limit: int = 100) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_ticker(symbol: str) -> Dict[str, Any]:
-    """
-    获取合约最新行情。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     data = futures_service.get_ticker(FUTURES_PUBLIC, FUTURES_REGISTRY, symbol)
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
     return {
@@ -620,10 +514,6 @@ def get_futures_ticker(symbol: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_index(symbol: str) -> Dict[str, Any]:
-    """
-    获取合约指数/标记价格。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
     data = futures_service.get_index(FUTURES_PUBLIC, FUTURES_REGISTRY, symbol)
     return {
@@ -638,10 +528,6 @@ def get_futures_index(symbol: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_depth(symbol: str, limit: int = 20) -> Dict[str, Any]:
-    """
-    获取合约订单簿深度。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
     data = futures_service.get_depth(FUTURES_PUBLIC, FUTURES_REGISTRY, symbol, limit)
     return {
@@ -654,10 +540,6 @@ def get_futures_depth(symbol: str, limit: int = 20) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_klines(symbol: str, interval: str = "1min", limit: int = 20) -> Dict[str, Any]:
-    """
-    获取合约K线。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
     data = futures_service.get_klines(FUTURES_PUBLIC, FUTURES_REGISTRY, symbol, interval, limit)
     return {
@@ -671,10 +553,6 @@ def get_futures_klines(symbol: str, interval: str = "1min", limit: int = 20) -> 
 
 @mcp.tool()
 def get_futures_balance(margin_coin: str = "USDT") -> Dict[str, Any]:
-    """
-    获取合约某个保证金币种余额。
-    margin_coin 例子: USDT
-    """
     data = FUTURES_PRIVATE.account()
     accounts = futures_account_service.extract_accounts(data)
     summary = futures_account_service.get_margin_coin_summary(accounts, margin_coin)
@@ -683,9 +561,6 @@ def get_futures_balance(margin_coin: str = "USDT") -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_positions() -> Dict[str, Any]:
-    """
-    获取当前所有非零合约持仓。
-    """
     data = FUTURES_PRIVATE.account()
     accounts = futures_account_service.extract_accounts(data)
     positions = futures_account_service.flatten_positions(accounts)
@@ -719,11 +594,52 @@ def get_futures_positions() -> Dict[str, Any]:
 
 
 @mcp.tool()
+def get_futures_order(
+    symbol: str,
+    order_id: str = "",
+    client_order_id: str = ""
+) -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
+    raw = FUTURES_PRIVATE.order(
+        contract_name=contract,
+        order_id=order_id if order_id else None,
+        client_order_id=client_order_id if client_order_id else None,
+    )
+
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = [raw]
+    else:
+        rows = []
+
+    normalized = []
+    for o in rows:
+        normalized.append({
+            "contract": o.get("contractName", contract),
+            "side": map_side(o.get("side")),
+            "price": o.get("price"),
+            "orig_qty": o.get("origQty"),
+            "executed_qty": o.get("executedQty"),
+            "avg_price": o.get("avgPrice"),
+            "status": o.get("status"),
+            "action": o.get("action"),
+            "trade_fee": o.get("tradeFee"),
+            "realized_amount": o.get("realizedAmount"),
+            "order_id": o.get("orderId"),
+            "time": o.get("transactTime"),
+            "raw": o,
+        })
+
+    return {
+        "contract": contract,
+        "orders": normalized,
+        "count": len(normalized),
+    }
+
+
+@mcp.tool()
 def get_futures_open_orders(symbol: str) -> Dict[str, Any]:
-    """
-    获取某个合约当前挂单。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     rows = futures_order_service.open_orders(
         FUTURES_PRIVATE,
         FUTURES_REGISTRY,
@@ -755,10 +671,6 @@ def get_futures_open_orders(symbol: str) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_my_trades(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取某个合约最近成交记录。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     trades = futures_order_service.my_trades(
         FUTURES_PRIVATE,
         FUTURES_REGISTRY,
@@ -775,10 +687,6 @@ def get_futures_my_trades(symbol: str, limit: int = 10) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_order_history(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取某个合约历史订单。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     rows = futures_order_service.order_historical(
         FUTURES_PRIVATE,
         FUTURES_REGISTRY,
@@ -795,10 +703,6 @@ def get_futures_order_history(symbol: str, limit: int = 10) -> Dict[str, Any]:
 
 @mcp.tool()
 def get_futures_profit_history(symbol: str, limit: int = 10) -> Dict[str, Any]:
-    """
-    获取某个合约盈亏记录。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    """
     rows = futures_order_service.profit_historical(
         FUTURES_PRIVATE,
         FUTURES_REGISTRY,
@@ -810,6 +714,35 @@ def get_futures_profit_history(symbol: str, limit: int = 10) -> Dict[str, Any]:
         "contract": contract,
         "records": rows,
         "count": len(rows),
+    }
+
+
+@mcp.tool()
+def get_futures_transaction_history(
+    begin_time: str,
+    end_time: str,
+    symbol: str,
+    page: int = 1,
+    limit: int = 200,
+    asset_type: int = 0,
+    lang_key: str = "en_US",
+    tx_type: str = ""
+) -> Dict[str, Any]:
+    raw = FUTURES_PRIVATE.get_user_transaction(
+        begin_time=begin_time,
+        end_time=end_time,
+        symbol=symbol,
+        page=page,
+        limit=limit,
+        asset_type=asset_type,
+        lang_key=lang_key,
+        tx_type=tx_type if tx_type else None,
+    )
+    return {
+        "symbol": symbol,
+        "page": page,
+        "limit": limit,
+        "result": raw,
     }
 
 
@@ -827,16 +760,6 @@ def create_futures_order(
     volume: str,
     price: str = ""
 ) -> Dict[str, Any]:
-    """
-    创建合约订单。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    side: BUY / SELL
-    open_action: OPEN / CLOSE
-    position_type: 1=全仓 2=逐仓
-    order_type: LIMIT / MARKET
-    volume: 数量（张）
-    price: LIMIT 单必填，MARKET 可留空
-    """
     p = price.strip() if isinstance(price, str) else price
     if p == "":
         p = None
@@ -860,12 +783,52 @@ def create_futures_order(
 
 
 @mcp.tool()
+def create_futures_condition_order(
+    symbol: str,
+    side: str,
+    open_action: str,
+    position_type: int,
+    order_type: str,
+    volume: str,
+    trigger_type: str,
+    trigger_price: str,
+    price: str = ""
+) -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
+    p = price.strip() if isinstance(price, str) else price
+    if p == "":
+        p = None
+
+    result = FUTURES_PRIVATE.create_condition_order(
+        contract_name=contract,
+        side=side,
+        open_action=open_action,
+        position_type=position_type,
+        order_type=order_type,
+        volume=volume,
+        trigger_type=trigger_type,
+        trigger_price=trigger_price,
+        price=p,
+    )
+
+    return {
+        "request": {
+            "contractName": contract,
+            "side": str(side).upper(),
+            "open": str(open_action).upper(),
+            "positionType": position_type,
+            "type": str(order_type).upper(),
+            "volume": str(volume),
+            "triggerType": str(trigger_type),
+            "triggerPrice": str(trigger_price),
+            "price": p,
+        },
+        "result": result,
+    }
+
+
+@mcp.tool()
 def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
-    """
-    撤销合约订单。
-    symbol 例子: E-BTC-USDT 或 BTCUSDT
-    order_id: 订单ID
-    """
     result = futures_order_service.cancel_order(
         FUTURES_PRIVATE,
         FUTURES_REGISTRY,
@@ -880,16 +843,65 @@ def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     }
 
 
+@mcp.tool()
+def cancel_all_futures_orders(symbol: str = "") -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol) if symbol else None
+    result = FUTURES_PRIVATE.cancel_all_orders(contract_name=contract)
+    return {
+        "contract": contract,
+        "result": result,
+    }
+
+
+@mcp.tool()
+def edit_futures_position_mode(symbol: str, position_model: int) -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
+    result = FUTURES_PRIVATE.edit_position_mode(contract, position_model)
+    return {
+        "contract": contract,
+        "position_model": position_model,
+        "result": result,
+    }
+
+
+@mcp.tool()
+def edit_futures_margin_mode(symbol: str, margin_model: int) -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
+    result = FUTURES_PRIVATE.edit_margin_mode(contract, margin_model)
+    return {
+        "contract": contract,
+        "margin_model": margin_model,
+        "result": result,
+    }
+
+
+@mcp.tool()
+def adjust_futures_position_margin(position_id: int, amount: str) -> Dict[str, Any]:
+    result = FUTURES_PRIVATE.edit_position_margin(position_id=position_id, amount=amount)
+    return {
+        "position_id": position_id,
+        "amount": amount,
+        "result": result,
+    }
+
+
+@mcp.tool()
+def edit_futures_leverage(symbol: str, now_level: int) -> Dict[str, Any]:
+    contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
+    result = FUTURES_PRIVATE.edit_leverage(contract_name=contract, now_level=now_level)
+    return {
+        "contract": contract,
+        "now_level": now_level,
+        "result": result,
+    }
+
+
 # =========================================================
 # Spot WS - Public
 # =========================================================
 
 @mcp.tool()
 def ws_spot_ticker_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
-    """
-    短时订阅现货 ticker WebSocket。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[ws_service.build_ticker_sub(api_symbol)],
@@ -900,10 +912,6 @@ def ws_spot_ticker_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[
 
 @mcp.tool()
 def ws_spot_depth_once(symbol: str, step: str = "step0", seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
-    """
-    短时订阅现货 depth WebSocket。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[ws_service.build_depth_sub(api_symbol, step=step)],
@@ -914,11 +922,6 @@ def ws_spot_depth_once(symbol: str, step: str = "step0", seconds: int = 3, limit
 
 @mcp.tool()
 def ws_spot_kline_once(symbol: str, interval: str = "1min", seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
-    """
-    短时订阅现货 kline WebSocket。
-    symbol 例子: BTCUSDT
-    interval: 1min/5min/15min/30min/60min/1day/1week/1month
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[ws_service.build_kline_sub(api_symbol, interval=interval)],
@@ -929,10 +932,6 @@ def ws_spot_kline_once(symbol: str, interval: str = "1min", seconds: int = 3, li
 
 @mcp.tool()
 def ws_spot_trades_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
-    """
-    短时订阅现货实时成交 WebSocket。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[ws_service.build_trade_sub(api_symbol)],
@@ -950,10 +949,6 @@ def ws_spot_kline_history_once(
     seconds: int = 3,
     limit: int = 20,
 ) -> Dict[str, Any]:
-    """
-    通过 WS req 请求现货历史K线。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[
@@ -971,10 +966,6 @@ def ws_spot_kline_history_once(
 
 @mcp.tool()
 def ws_spot_trade_history_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
-    """
-    通过 WS req 请求现货历史成交。
-    symbol 例子: BTCUSDT
-    """
     api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
     return _collect_ws_messages(
         subscriptions=[ws_service.build_trade_req(api_symbol)],
