@@ -1,5 +1,3 @@
-# tools/futures_order_service.py
-
 from .field_mapper import (
     map_side,
     map_open_close,
@@ -8,134 +6,116 @@ from .field_mapper import (
 )
 
 
-def open_orders(api, registry, symbol):
-    contract = registry.resolve_contract_name(symbol)
-
-    result = api.open_orders(contract)
-
-    if isinstance(result, dict):
-
-        if isinstance(result.get("data"), list):
-            return result["data"]
-
-        if isinstance(result.get("data"), dict):
-            return [result["data"]]
-
+def _normalize_list_result(raw):
+    if isinstance(raw, dict):
+        if isinstance(raw.get("data"), list):
+            return raw["data"]
+        if isinstance(raw.get("list"), list):
+            return raw["list"]
+        if isinstance(raw.get("data"), dict):
+            return [raw["data"]]
+        if raw.get("data") is None and str(raw.get("code")) == "0":
+            return []
         return []
 
-    if isinstance(result, list):
-        return result
+    if isinstance(raw, list):
+        return raw
 
     return []
 
 
-def order_query(api, registry, symbol, order_id=None):
+def open_orders(api, registry, symbol=None):
+    contract = registry.resolve_contract_name(symbol) if symbol else None
+    result = api.open_orders(contract)
+
+    return _normalize_list_result(result)
+
+
+def order_query(api, registry, symbol, order_id=None, client_order_id=None):
+    contract = registry.resolve_contract_name(symbol)
+    return api.order(contract, order_id=order_id, client_order_id=client_order_id)
+
+
+def my_trades(api, registry, symbol, limit=10, from_id=None):
     contract = registry.resolve_contract_name(symbol)
 
-    result = api.order_query(contract, order_id)
-
-    return result
-
-
-def my_trades(api, registry, symbol, limit=10):
-    contract = registry.resolve_contract_name(symbol)
-
-    trades = api.my_trades(contract, limit)
-
-    if isinstance(trades, dict):
-
-        if isinstance(trades.get("data"), list):
-            trade_list = trades["data"]
-        else:
-            trade_list = []
-
-    elif isinstance(trades, list):
-        trade_list = trades
-    else:
-        trade_list = []
+    trades = api.my_trades(contract, limit=limit, from_id=from_id)
+    trade_list = _normalize_list_result(trades)
 
     clean = []
 
     for t in trade_list:
-
         clean.append({
-            "contract": t.get("contractName"),
+            "contract": t.get("contractName", t.get("symbol")),
             "side": map_side(t.get("side")),
             "price": t.get("price"),
-            "qty": t.get("qty"),
+            "qty": t.get("qty", t.get("volume")),
             "fee": t.get("fee"),
             "time": t.get("time"),
+            "raw": t,
         })
 
     return clean
 
 
-def order_historical(api, registry, symbol, limit=10):
+def order_historical(api, registry, symbol, limit=10, from_id=None):
     contract = registry.resolve_contract_name(symbol)
 
-    orders = api.order_historical(contract, limit)
-
-    if isinstance(orders, dict):
-
-        if isinstance(orders.get("data"), list):
-            order_list = orders["data"]
-        else:
-            order_list = []
-
-    elif isinstance(orders, list):
-        order_list = orders
-    else:
-        order_list = []
+    orders = api.order_historical(contract, limit=limit, from_id=from_id)
+    order_list = _normalize_list_result(orders)
 
     clean = []
 
     for o in order_list:
-
         clean.append({
-            "contract": o.get("contractName"),
+            "contract": o.get("contractName", o.get("symbol")),
             "side": map_side(o.get("side")),
-            "action": map_open_close(o.get("openOrClose")),
+            "action": map_open_close(o.get("openOrClose", o.get("action"))),
             "position_mode": map_position_type(o.get("positionType")),
             "price": o.get("price"),
-            "volume": o.get("volume"),
-            "deal_volume": o.get("dealVolume"),
+            "volume": o.get("volume", o.get("origQty")),
+            "deal_volume": o.get("dealVolume", o.get("executedQty")),
             "status": map_order_status(o.get("status")),
-            "time": o.get("ctimeMs", o.get("ctime")),
+            "time": o.get("ctimeMs", o.get("ctime", o.get("transactTime"))),
+            "raw": o,
         })
 
     return clean
 
 
-def profit_historical(api, registry, symbol, limit=10):
-    contract = registry.resolve_contract_name(symbol)
+def profit_historical(
+    api,
+    registry,
+    symbol=None,
+    limit=10,
+    from_id=None,
+    start_time=None,
+    end_time=None,
+):
+    contract = registry.resolve_contract_name(symbol) if symbol else None
 
-    records = api.profit_historical(contract, limit)
-
-    if isinstance(records, dict):
-
-        if isinstance(records.get("data"), list):
-            record_list = records["data"]
-        else:
-            record_list = []
-
-    elif isinstance(records, list):
-        record_list = records
-    else:
-        record_list = []
+    records = api.profit_historical(
+        contract_name=contract,
+        limit=limit,
+        from_id=from_id,
+        start_time=start_time,
+        end_time=end_time,
+    )
+    record_list = _normalize_list_result(records)
 
     clean = []
 
     for r in record_list:
-
         clean.append({
-            "contract": r.get("contractName"),
+            "contract": r.get("contractName", r.get("symbol")),
             "side": map_side(r.get("side")),
             "position_mode": map_position_type(r.get("positionType")),
             "open_price": r.get("openPrice"),
             "profit": r.get("closeProfit"),
             "fee": r.get("tradeFee"),
             "leverage": r.get("leverageLevel"),
-            "time": r.get("ctime"),
+            "time": r.get("ctime", r.get("mtime")),
+            "raw": r,
         })
 
     return clean
@@ -150,29 +130,82 @@ def create_order(
     position_type,
     order_type,
     volume,
-    price=None
+    price=None,
+    client_order_id="",
+    time_in_force="",
+    order_unit=2,
 ):
-
     contract = registry.resolve_contract_name(symbol)
 
     data = {
-        "contract_name": contract,
-        "side": side,
-        "open_action": open_action,
-        "position_type": position_type,
-        "order_type": order_type,
+        "contractName": contract,
+        "side": str(side).upper(),
+        "open": str(open_action).upper(),
+        "positionType": position_type,
+        "type": str(order_type).upper(),
         "volume": volume,
         "price": price,
+        "clientOrderId": client_order_id,
+        "timeInForce": time_in_force,
+        "orderUnit": order_unit,
     }
 
     result = api.create_order(
-        contract,
-        side,
-        open_action,
-        position_type,
-        order_type,
-        volume,
-        price,
+        contract_name=contract,
+        side=side,
+        open_action=open_action,
+        position_type=position_type,
+        order_type=order_type,
+        volume=volume,
+        price=price,
+        client_order_id=client_order_id,
+        time_in_force=time_in_force,
+        order_unit=order_unit,
+    )
+
+    return data, result
+
+
+def create_condition_order(
+    api,
+    registry,
+    symbol,
+    side,
+    open_action,
+    position_type,
+    order_type,
+    volume,
+    trigger_type,
+    trigger_price,
+    price=None,
+    order_unit=2,
+):
+    contract = registry.resolve_contract_name(symbol)
+
+    data = {
+        "contractName": contract,
+        "side": str(side).upper(),
+        "open": str(open_action).upper(),
+        "positionType": position_type,
+        "type": str(order_type).upper(),
+        "volume": volume,
+        "triggerType": trigger_type,
+        "triggerPrice": trigger_price,
+        "price": price,
+        "orderUnit": order_unit,
+    }
+
+    result = api.create_condition_order(
+        contract_name=contract,
+        side=side,
+        open_action=open_action,
+        position_type=position_type,
+        order_type=order_type,
+        volume=volume,
+        trigger_type=trigger_type,
+        trigger_price=trigger_price,
+        price=price,
+        order_unit=order_unit,
     )
 
     return data, result
@@ -180,7 +213,51 @@ def create_order(
 
 def cancel_order(api, registry, symbol, order_id):
     contract = registry.resolve_contract_name(symbol)
+    return api.cancel_order(contract, order_id)
 
-    result = api.cancel_order(contract, order_id)
 
-    return result
+def cancel_all_orders(api, registry, symbol=None):
+    contract = registry.resolve_contract_name(symbol) if symbol else None
+    return api.cancel_all_orders(contract_name=contract)
+
+
+def edit_position_mode(api, registry, symbol, position_model):
+    contract = registry.resolve_contract_name(symbol)
+    return api.edit_position_mode(contract, position_model)
+
+
+def edit_margin_mode(api, registry, symbol, margin_model):
+    contract = registry.resolve_contract_name(symbol)
+    return api.edit_margin_mode(contract, margin_model)
+
+
+def edit_position_margin(api, position_id, amount):
+    return api.edit_position_margin(position_id, amount)
+
+
+def edit_leverage(api, registry, symbol, now_level):
+    contract = registry.resolve_contract_name(symbol)
+    return api.edit_leverage(contract, now_level)
+
+
+def get_user_transaction(
+    api,
+    begin_time,
+    end_time,
+    symbol,
+    page=1,
+    limit=200,
+    asset_type=None,
+    lang_key=None,
+    tx_type=None,
+):
+    return api.get_user_transaction(
+        begin_time=begin_time,
+        end_time=end_time,
+        symbol=symbol,
+        page=page,
+        limit=limit,
+        asset_type=asset_type,
+        lang_key=lang_key,
+        tx_type=tx_type,
+    )
