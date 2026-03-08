@@ -1,6 +1,7 @@
 # /www/wwwroot/zke-trading/mcp_server.py
 
 import json
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,7 +22,10 @@ from tools import futures_account_service
 from tools import futures_order_service
 from tools import margin_order_service
 from tools import withdraw_service
-from tools.field_mapper import map_side, map_position_type, map_order_status, map_order_type
+from tools.field_mapper import map_side, map_position_type, map_order_status
+from tools.ws_client import ZKEWebSocketClient
+from tools.ws_parser import normalize_ws_message
+from tools import ws_service
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -57,6 +61,15 @@ def build_futures_client() -> ZKEClient:
     )
 
 
+def get_ws_url() -> str:
+    config = load_config()
+    ws_conf = config.get("ws", {})
+    url = ws_conf.get("url")
+    if not url:
+        raise ValueError("config.json 中缺少 ws.url")
+    return url
+
+
 SPOT_CLIENT = build_spot_client()
 SPOT_PUBLIC = SpotPublicApi(SPOT_CLIENT)
 SPOT_PRIVATE = SpotPrivateApi(SPOT_CLIENT)
@@ -76,14 +89,60 @@ def _normalize_list_result(raw: Any) -> List[Dict[str, Any]]:
             return raw["list"]
         if isinstance(raw.get("data"), list):
             return raw["data"]
-        if isinstance(raw.get("data"), dict):
-            return [raw["data"]]
         if raw.get("data") is None and str(raw.get("code")) == "0":
             return []
         return []
     if isinstance(raw, list):
         return raw
     return []
+
+
+# =========================================================
+# WebSocket helpers
+# =========================================================
+
+def _collect_ws_messages(
+    subscriptions: List[dict],
+    seconds: int = 3,
+    limit: int = 20,
+    debug: bool = False,
+) -> Dict[str, Any]:
+    messages: List[Dict[str, Any]] = []
+
+    def _handler(data: Any):
+        try:
+            normalized = normalize_ws_message(data)
+        except Exception:
+            normalized = {"type": "unknown", "raw": data}
+
+        if len(messages) < limit:
+            messages.append(normalized)
+
+    client = ZKEWebSocketClient(
+        url=get_ws_url(),
+        subscriptions=subscriptions,
+        on_message=_handler,
+        reconnect=False,
+        reconnect_delay=1,
+        debug=debug,
+    )
+
+    thread = client.start_background()
+
+    try:
+        time.sleep(max(1, int(seconds)))
+    finally:
+        client.close()
+
+    if thread:
+        thread.join(timeout=2)
+
+    return {
+        "ws_url": get_ws_url(),
+        "seconds": max(1, int(seconds)),
+        "count": len(messages),
+        "messages": messages,
+    }
 
 
 # =========================================================
@@ -105,7 +164,6 @@ def get_spot_ticker(symbol: str) -> Dict[str, Any]:
         "high": data.get("high"),
         "low": data.get("low"),
         "vol": data.get("vol"),
-        "amount": data.get("amount"),
         "rose": data.get("rose"),
         "open": data.get("open"),
         "time": data.get("time"),
@@ -206,9 +264,9 @@ def create_spot_order(
     创建现货订单。
     symbol 例子: BTCUSDT
     side: BUY / SELL
-    order_type: LIMIT / MARKET / IOC / FOK / POST_ONLY / STOP
+    order_type: LIMIT / MARKET
     volume: 数量
-    price: LIMIT / STOP 等需要价格时填写
+    price: LIMIT 单必填，MARKET 可留空
     """
     p = price.strip() if isinstance(price, str) else price
     if p == "":
@@ -259,18 +317,20 @@ def create_withdraw(
     coin: str,
     address: str,
     amount: str,
+    network: str = "",
     memo: str = ""
 ) -> Dict[str, Any]:
     """
     发起提现。
-    注意: 多链币种请直接传真实 symbol，例如 USDTBSC / TUSDT / EUSDT。
+    network 和 memo 可留空。
     """
     result = withdraw_service.apply_withdraw(
         SPOT_PRIVATE,
         coin,
         address,
         amount,
-        memo=memo if memo else None
+        network if network else None,
+        memo if memo else None
     )
 
     return result
@@ -287,8 +347,8 @@ def get_withdraw_history(
     """
     rows = withdraw_service.withdraw_history(
         SPOT_PRIVATE,
-        coin=coin if coin else None,
-        limit=limit
+        coin if coin else None,
+        limit
     )
 
     return {
@@ -438,18 +498,6 @@ def get_futures_ticker(symbol: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def get_futures_ticker_all() -> Dict[str, Any]:
-    """
-    获取全部合约行情。
-    """
-    data = futures_service.get_ticker_all(FUTURES_PUBLIC)
-    return {
-        "tickers": data,
-        "count": len(data) if isinstance(data, dict) else 0,
-    }
-
-
-@mcp.tool()
 def get_futures_index(symbol: str) -> Dict[str, Any]:
     """
     获取合约指数/标记价格。
@@ -566,16 +614,15 @@ def get_futures_open_orders(symbol: str) -> Dict[str, Any]:
     normalized = []
     for o in rows:
         normalized.append({
-            "contract": o.get("contractName") or o.get("symbol") or contract,
+            "contract": o.get("contractName") or contract,
             "side": map_side(o.get("side")),
-            "type": map_order_type(o.get("type")),
+            "position_type": map_position_type(o.get("positionType")),
             "price": o.get("price"),
-            "orig_qty": o.get("origQty", o.get("volume")),
-            "executed_qty": o.get("executedQty", o.get("dealVolume")),
-            "avg_price": o.get("avgPrice"),
+            "volume": o.get("volume"),
+            "deal_volume": o.get("dealVolume"),
             "status": map_order_status(o.get("status")),
-            "order_id": o.get("orderId") or o.get("orderIdString"),
-            "time": o.get("time") or o.get("transactTime") or o.get("ctimeMs") or o.get("ctime"),
+            "order_id": o.get("orderId"),
+            "time": o.get("ctimeMs") or o.get("ctime") or o.get("transactTime"),
         })
 
     return {
@@ -692,46 +739,6 @@ def create_futures_order(
 
 
 @mcp.tool()
-def create_futures_condition_order(
-    symbol: str,
-    side: str,
-    open_action: str,
-    position_type: int,
-    order_type: str,
-    volume: str,
-    trigger_type: str,
-    trigger_price: str,
-    price: str = ""
-) -> Dict[str, Any]:
-    """
-    创建合约条件单。
-    trigger_type 示例: 3UP / 4DOWN
-    """
-    p = price.strip() if isinstance(price, str) else price
-    if p == "":
-        p = None
-
-    data, result = futures_order_service.create_condition_order(
-        FUTURES_PRIVATE,
-        FUTURES_REGISTRY,
-        symbol,
-        side,
-        open_action,
-        position_type,
-        order_type,
-        volume,
-        trigger_type,
-        trigger_price,
-        p
-    )
-
-    return {
-        "request": data,
-        "result": result,
-    }
-
-
-@mcp.tool()
 def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     """
     撤销合约订单。
@@ -752,21 +759,107 @@ def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     }
 
 
+# =========================================================
+# Spot WS - Public
+# =========================================================
+
 @mcp.tool()
-def cancel_all_futures_orders(symbol: str = "") -> Dict[str, Any]:
+def ws_spot_ticker_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
     """
-    撤销某个合约或全部合约挂单。
-    symbol 留空则尝试撤全部。
+    短时订阅现货 ticker WebSocket。
+    symbol 例子: BTCUSDT
     """
-    result = futures_order_service.cancel_all_orders(
-        FUTURES_PRIVATE,
-        FUTURES_REGISTRY,
-        symbol if symbol else None
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[ws_service.build_ticker_sub(api_symbol)],
+        seconds=seconds,
+        limit=limit,
     )
-    return {
-        "symbol": symbol,
-        "result": result,
-    }
+
+
+@mcp.tool()
+def ws_spot_depth_once(symbol: str, step: str = "step0", seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
+    """
+    短时订阅现货 depth WebSocket。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[ws_service.build_depth_sub(api_symbol, step=step)],
+        seconds=seconds,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def ws_spot_kline_once(symbol: str, interval: str = "1min", seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
+    """
+    短时订阅现货 kline WebSocket。
+    symbol 例子: BTCUSDT
+    interval: 1min/5min/15min/30min/60min/1day/1week/1month
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[ws_service.build_kline_sub(api_symbol, interval=interval)],
+        seconds=seconds,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def ws_spot_trades_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
+    """
+    短时订阅现货实时成交 WebSocket。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[ws_service.build_trade_sub(api_symbol)],
+        seconds=seconds,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def ws_spot_kline_history_once(
+    symbol: str,
+    interval: str = "1min",
+    page_size: int = 100,
+    end_idx: str = "",
+    seconds: int = 3,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """
+    通过 WS req 请求现货历史K线。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[
+            ws_service.build_kline_req(
+                api_symbol,
+                interval=interval,
+                end_idx=end_idx if end_idx else None,
+                page_size=page_size,
+            )
+        ],
+        seconds=seconds,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def ws_spot_trade_history_once(symbol: str, seconds: int = 3, limit: int = 20) -> Dict[str, Any]:
+    """
+    通过 WS req 请求现货历史成交。
+    symbol 例子: BTCUSDT
+    """
+    api_symbol = SPOT_REGISTRY.get_api_symbol(symbol)
+    return _collect_ws_messages(
+        subscriptions=[ws_service.build_trade_req(api_symbol)],
+        seconds=seconds,
+        limit=limit,
+    )
 
 
 if __name__ == "__main__":
