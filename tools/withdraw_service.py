@@ -1,7 +1,6 @@
-# /www/wwwroot/zke-trading/tools/withdraw_service.py
-
 import time
 import uuid
+from typing import Optional
 
 
 def _gen_withdraw_order_id() -> str:
@@ -10,19 +9,36 @@ def _gen_withdraw_order_id() -> str:
     return f"wd_{ts}_{rand}"
 
 
-def apply_withdraw(api, coin, address, amount, network=None, memo=None, withdraw_order_id=None):
+def apply_withdraw(
+    api,
+    coin,
+    address,
+    amount,
+    memo: Optional[str] = None,
+    withdraw_order_id: Optional[str] = None,
+):
+    """
+    发起提现
+
+    新版文档:
+    POST /sapi/v1/withdraw/apply
+
+    body:
+    - symbol
+    - address
+    - amount
+    - withdrawOrderId
+    - label (可选)
+    """
     if not withdraw_order_id:
         withdraw_order_id = _gen_withdraw_order_id()
 
     body = {
-        "symbol": coin,
+        "symbol": str(coin),
         "address": address,
         "amount": amount,
         "withdrawOrderId": withdraw_order_id,
     }
-
-    if network:
-        body["network"] = network
 
     if memo:
         body["label"] = memo
@@ -30,29 +46,58 @@ def apply_withdraw(api, coin, address, amount, network=None, memo=None, withdraw
     result = api.withdraw_apply(body)
 
     return {
-        "coin": coin,
+        "coin": str(coin),
         "address": address,
         "amount": amount,
-        "network": network,
         "memo": memo,
         "withdraw_order_id": withdraw_order_id,
         "result": result
     }
 
 
-def withdraw_history(api, coin=None, limit=20):
+def withdraw_history(
+    api,
+    coin: Optional[str] = None,
+    withdraw_id: Optional[str] = None,
+    withdraw_order_id: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    page: Optional[int] = None,
+    limit: int = 20,
+):
     """
     查询提现记录
 
-    这里改成最保守调用：
-    - 不默认传 page
-    - 不默认传 limit
-    - 只在用户明确给 coin 时传 symbol
+    新版文档:
+    POST /sapi/v1/withdraw/query
+
+    body 可选:
+    - symbol
+    - withdrawId
+    - withdrawOrderId
+    - startTime
+    - endTime
+    - page
     """
     params = {}
 
     if coin:
-        params["symbol"] = coin
+        params["symbol"] = str(coin)
+
+    if withdraw_id:
+        params["withdrawId"] = str(withdraw_id)
+
+    if withdraw_order_id:
+        params["withdrawOrderId"] = str(withdraw_order_id)
+
+    if start_time:
+        params["startTime"] = str(start_time)
+
+    if end_time:
+        params["endTime"] = str(end_time)
+
+    if page is not None:
+        params["page"] = page
 
     result = api.withdraw_history(params)
 
