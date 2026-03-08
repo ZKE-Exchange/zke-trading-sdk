@@ -2,6 +2,9 @@ import type { PluginConfig, ToolSpec } from "./types.js";
 import { createSpotTools } from "./tools/spot.js";
 import { createFuturesTools } from "./tools/futures.js";
 import { createWalletTools } from "./tools/wallet.js";
+import { createMarginTools } from "./tools/margin.js";
+import { createFuturesTransactionTools } from "./tools/futures_transaction.js";
+import { createFuturesControlTools } from "./tools/futures_controls.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -15,6 +18,9 @@ function buildTools(config?: PluginConfig): ToolSpec[] {
     ...createSpotTools(config),
     ...createFuturesTools(config),
     ...createWalletTools(config),
+    ...createMarginTools(config),
+    ...createFuturesTransactionTools(config),
+    ...createFuturesControlTools(config),
   ];
 }
 
