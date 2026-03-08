@@ -26,7 +26,7 @@ export function resolveRuntime(config?: PluginConfig) {
   return {
     tradingHome,
     pythonBin,
-    mainPy: path.join(tradingHome, "main.py")
+    mainPy: path.join(tradingHome, "main.py"),
   };
 }
 
@@ -75,8 +75,8 @@ export async function runMainJson(
       cwd: runtime.tradingHome,
       maxBuffer: 10 * 1024 * 1024,
       env: {
-        ...process.env
-      }
+        ...process.env,
+      },
     }
   );
 
@@ -89,7 +89,7 @@ export async function runMainJson(
 export function requireTradingApproval(config?: PluginConfig) {
   if (config?.autoApproveTrading) return;
   throw new Error(
-    "This plugin blocks trading/withdraw execution unless autoApproveTrading=true in plugin config. " +
+    "This plugin blocks trading/withdraw/transfer execution unless autoApproveTrading=true in plugin config. " +
       "Set it only if you fully trust this local environment."
   );
 }
