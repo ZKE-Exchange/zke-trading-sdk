@@ -9,14 +9,14 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
       inputSchema: {
         type: "object",
         properties: {
-          symbol: { type: "string" }
+          symbol: { type: "string" },
         },
         required: ["symbol"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol }) => {
         return await runMainJson(["ticker", String(symbol)], config);
-      }
+      },
     },
     {
       name: "zke_get_spot_depth",
@@ -25,32 +25,84 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         type: "object",
         properties: {
           symbol: { type: "string" },
-          limit: { type: "integer", default: 20 }
+          limit: { type: "integer", default: 20 },
         },
         required: ["symbol"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(
-          ["depth", String(symbol), String(limit)],
-          config
-        );
-      }
+        return await runMainJson(["depth", String(symbol), String(limit)], config);
+      },
     },
     {
-      name: "zke_get_spot_balance",
-      description: "Get ZKE spot balance details for one asset, e.g. USDT",
+      name: "zke_get_spot_klines",
+      description: "Get ZKE spot kline data",
       inputSchema: {
         type: "object",
         properties: {
-          asset: { type: "string" }
+          symbol: { type: "string" },
+          interval: { type: "string", default: "1day" },
+        },
+        required: ["symbol"],
+        additionalProperties: false,
+      },
+      execute: async ({ symbol, interval = "1day" }) => {
+        return await runMainJson(["klines", String(symbol), String(interval)], config);
+      },
+    },
+    {
+      name: "zke_get_spot_account",
+      description: "Get raw ZKE spot account data",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        return await runMainJson(["account"], config);
+      },
+    },
+    {
+      name: "zke_get_spot_nonzero_balances",
+      description: "Get non-zero ZKE spot balances",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        return await runMainJson(["account-nonzero"], config);
+      },
+    },
+    {
+      name: "zke_get_spot_balance",
+      description: "Get ZKE spot balance summary for one asset, e.g. USDT",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset: { type: "string" },
         },
         required: ["asset"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ asset }) => {
-        return await runMainJson(["account-asset", String(asset)], config);
-      }
+        return await runMainJson(["balance", String(asset)], config);
+      },
+    },
+    {
+      name: "zke_get_spot_account_by_type",
+      description: "Get ZKE spot account assets by account type",
+      inputSchema: {
+        type: "object",
+        properties: {
+          account_type: { type: "string", description: "1=spot, 2=isolated, 3=cross, 4=otc, 5=contract" },
+        },
+        required: ["account_type"],
+        additionalProperties: false,
+      },
+      execute: async ({ account_type }) => {
+        return await runMainJson(["account-by-type", String(account_type)], config);
+      },
     },
     {
       name: "zke_get_spot_open_orders",
@@ -59,17 +111,14 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         type: "object",
         properties: {
           symbol: { type: "string" },
-          limit: { type: "integer", default: 20 }
+          limit: { type: "integer", default: 20 },
         },
         required: ["symbol"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(
-          ["open-orders", String(symbol), String(limit)],
-          config
-        );
-      }
+        return await runMainJson(["open-orders", String(symbol), String(limit)], config);
+      },
     },
     {
       name: "zke_get_spot_my_trades",
@@ -78,17 +127,46 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         type: "object",
         properties: {
           symbol: { type: "string" },
-          limit: { type: "integer", default: 20 }
+          limit: { type: "integer", default: 20 },
         },
         required: ["symbol"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(
-          ["my-trades", String(symbol), String(limit)],
-          config
-        );
-      }
+        return await runMainJson(["my-trades", String(symbol), String(limit)], config);
+      },
+    },
+    {
+      name: "zke_get_spot_my_trades_v3",
+      description: "Get ZKE spot trade history via v3 endpoint",
+      inputSchema: {
+        type: "object",
+        properties: {
+          symbol: { type: "string" },
+          limit: { type: "integer", default: 50 },
+        },
+        required: ["symbol"],
+        additionalProperties: false,
+      },
+      execute: async ({ symbol, limit = 50 }) => {
+        return await runMainJson(["my-trades-v3", String(symbol), String(limit)], config);
+      },
+    },
+    {
+      name: "zke_get_spot_history_orders",
+      description: "Get ZKE spot historical orders",
+      inputSchema: {
+        type: "object",
+        properties: {
+          symbol: { type: "string" },
+          limit: { type: "integer", default: 50 },
+        },
+        required: ["symbol"],
+        additionalProperties: false,
+      },
+      execute: async ({ symbol, limit = 50 }) => {
+        return await runMainJson(["history-orders", String(symbol), String(limit)], config);
+      },
     },
     {
       name: "zke_create_spot_order",
@@ -101,10 +179,10 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
           side: { type: "string", enum: ["BUY", "SELL"] },
           order_type: { type: "string", enum: ["LIMIT", "MARKET"] },
           volume: { type: "string" },
-          price: { type: "string" }
+          price: { type: "string" },
         },
         required: ["symbol", "side", "order_type", "volume"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol, side, order_type, volume, price = "" }) => {
         requireTradingApproval(config);
@@ -113,13 +191,13 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
           String(symbol),
           String(side),
           String(order_type),
-          String(volume)
+          String(volume),
         ];
         if (String(order_type).toUpperCase() === "LIMIT") {
           args.push(String(price));
         }
         return await runMainJson(args, config);
-      }
+      },
     },
     {
       name: "zke_cancel_spot_order",
@@ -129,18 +207,15 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         type: "object",
         properties: {
           symbol: { type: "string" },
-          order_id: { type: "string" }
+          order_id: { type: "string" },
         },
         required: ["symbol", "order_id"],
-        additionalProperties: false
+        additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
         requireTradingApproval(config);
-        return await runMainJson(
-          ["cancel-order", String(symbol), String(order_id)],
-          config
-        );
-      }
-    }
+        return await runMainJson(["cancel-order", String(symbol), String(order_id)], config);
+      },
+    },
   ];
 }
