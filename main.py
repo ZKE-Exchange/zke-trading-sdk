@@ -142,6 +142,11 @@ def print_help():
         "  python3 main.py futures-condition-order E-BTC-USDT BUY OPEN 2 LIMIT 1 3UP 50000 50010\n"
         "  python3 main.py futures-cancel-order E-BTC-USDT <orderId>\n"
         "  python3 main.py futures-cancel-all-orders [E-BTC-USDT]\n"
+        "  python3 main.py futures-transaction-history 2025-03-01 2025-03-08 BTC-USDT 1 200 [assetType] [langKey] [type]\n"
+        "  python3 main.py futures-edit-position-mode E-BTC-USDT 1\n"
+        "  python3 main.py futures-edit-margin-mode E-BTC-USDT 1\n"
+        "  python3 main.py futures-edit-position-margin 123456 10\n"
+        "  python3 main.py futures-edit-leverage E-BTC-USDT 20\n"
         "\nWebSocket:\n"
         "  python3 main.py ws-ticker BTCUSDT 30\n"
         "  python3 main.py ws-depth BTCUSDT step0 30\n"
@@ -776,6 +781,77 @@ def main():
         if cmd == "futures-cancel-all-orders":
             symbol = sys.argv[2] if len(sys.argv) > 2 else None
             pretty_print(futures_order_service.cancel_all_orders(futures_private, futures_registry, symbol))
+            return
+
+        if cmd == "futures-transaction-history":
+            begin_time = sys.argv[2]
+            end_time = sys.argv[3]
+            symbol = sys.argv[4]
+            page = int(sys.argv[5]) if len(sys.argv) > 5 else 1
+            limit = int(sys.argv[6]) if len(sys.argv) > 6 else 200
+            asset_type = int(sys.argv[7]) if len(sys.argv) > 7 and sys.argv[7] != "" else None
+            lang_key = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8] != "" else None
+            tx_type = sys.argv[9] if len(sys.argv) > 9 and sys.argv[9] != "" else None
+
+            pretty_print(
+                futures_private.get_user_transaction(
+                    begin_time=begin_time,
+                    end_time=end_time,
+                    symbol=symbol,
+                    page=page,
+                    limit=limit,
+                    asset_type=asset_type,
+                    lang_key=lang_key,
+                    tx_type=tx_type,
+                )
+            )
+            return
+
+        if cmd == "futures-edit-position-mode":
+            symbol = sys.argv[2]
+            position_model = int(sys.argv[3])
+            contract_name = futures_registry.resolve_contract_name(symbol)
+            pretty_print(
+                futures_private.edit_position_mode(
+                    contract_name=contract_name,
+                    position_model=position_model,
+                )
+            )
+            return
+
+        if cmd == "futures-edit-margin-mode":
+            symbol = sys.argv[2]
+            margin_model = int(sys.argv[3])
+            contract_name = futures_registry.resolve_contract_name(symbol)
+            pretty_print(
+                futures_private.edit_margin_mode(
+                    contract_name=contract_name,
+                    margin_model=margin_model,
+                )
+            )
+            return
+
+        if cmd == "futures-edit-position-margin":
+            position_id = int(sys.argv[2])
+            amount = sys.argv[3]
+            pretty_print(
+                futures_private.edit_position_margin(
+                    position_id=position_id,
+                    amount=amount,
+                )
+            )
+            return
+
+        if cmd == "futures-edit-leverage":
+            symbol = sys.argv[2]
+            now_level = int(sys.argv[3])
+            contract_name = futures_registry.resolve_contract_name(symbol)
+            pretty_print(
+                futures_private.edit_leverage(
+                    contract_name=contract_name,
+                    now_level=now_level,
+                )
+            )
             return
 
         print_help()
