@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
@@ -31,28 +32,45 @@ class ZKEClient:
         self.timeout = timeout
         self.session = requests.Session()
 
-    def _headers(self, signed: bool = False) -> Dict[str, str]:
+    def _build_headers(
+        self,
+        signed: bool = False,
+        ts: str = "",
+        sign: str = "",
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, str]:
         headers = {
             "Content-Type": "application/json"
         }
+
         if signed and self.api_key:
-            headers["X-BH-APIKEY"] = self.api_key
+            headers["X-CH-APIKEY"] = self.api_key
+        if signed and ts:
+            headers["X-CH-TS"] = ts
+        if signed and sign:
+            headers["X-CH-SIGN"] = sign
+
+        if extra_headers:
+            headers.update(extra_headers)
+
         return headers
 
-    def _sign_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _sign(
+        self,
+        ts: str,
+        method: str,
+        request_path: str,
+        body_str: str = "",
+    ) -> str:
         if not self.api_secret:
-            return params
+            return ""
 
-        query = urlencode(params)
-        signature = hmac.new(
+        payload = f"{ts}{method.upper()}{request_path}{body_str}"
+        return hmac.new(
             self.api_secret.encode("utf-8"),
-            query.encode("utf-8"),
+            payload.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
-
-        signed = dict(params)
-        signed["signature"] = signature
-        return signed
 
     def request(
         self,
@@ -61,33 +79,47 @@ class ZKEClient:
         params: Optional[Dict[str, Any]] = None,
         body: Optional[Dict[str, Any]] = None,
         signed: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
     ) -> Any:
         method = method.upper()
-        params = params or {}
-        body = body or {}
+        params = dict(params or {})
+        body = dict(body or {})
 
         url = f"{self.base_url}{path}"
 
-        if signed:
-            ts = int(time.time() * 1000)
+        # recvWindow is optional; only send when caller explicitly wants it
+        # or when body/params already include it.
+        query_str = urlencode(params) if params else ""
+        request_path = path if not query_str else f"{path}?{query_str}"
 
-            if method == "GET":
-                params = dict(params)
-                params.setdefault("timestamp", ts)
-                params.setdefault("recvwindow", self.recv_window)
-                params = self._sign_params(params)
-            else:
-                body = dict(body)
-                body.setdefault("timestamp", ts)
-                body.setdefault("recvwindow", self.recv_window)
-                body = self._sign_params(body)
+        body_str = ""
+        if method != "GET" and body:
+            body_str = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+
+        ts = ""
+        sign = ""
+        if signed:
+            ts = str(int(time.time() * 1000))
+            sign = self._sign(
+                ts=ts,
+                method=method,
+                request_path=request_path,
+                body_str=body_str if method != "GET" else "",
+            )
+
+        headers = self._build_headers(
+            signed=signed,
+            ts=ts,
+            sign=sign,
+            extra_headers=extra_headers,
+        )
 
         resp = self.session.request(
             method=method,
             url=url,
             params=params if method == "GET" else None,
-            json=body if method != "GET" else None,
-            headers=self._headers(signed=signed),
+            data=body_str if method != "GET" else None,
+            headers=headers,
             timeout=self.timeout,
         )
 
