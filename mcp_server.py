@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -21,7 +21,7 @@ from tools import futures_account_service
 from tools import futures_order_service
 from tools import margin_order_service
 from tools import withdraw_service
-from tools.field_mapper import map_side, map_position_type, map_order_status
+from tools.field_mapper import map_side, map_position_type, map_order_status, map_order_type
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -76,6 +76,8 @@ def _normalize_list_result(raw: Any) -> List[Dict[str, Any]]:
             return raw["list"]
         if isinstance(raw.get("data"), list):
             return raw["data"]
+        if isinstance(raw.get("data"), dict):
+            return [raw["data"]]
         if raw.get("data") is None and str(raw.get("code")) == "0":
             return []
         return []
@@ -98,11 +100,12 @@ def get_spot_ticker(symbol: str) -> Dict[str, Any]:
     return {
         "symbol": symbol.upper(),
         "last": data.get("last"),
-        "buy": data.get("buy"),
-        "sell": data.get("sell"),
+        "buy": data.get("buy", data.get("bidPrice")),
+        "sell": data.get("sell", data.get("askPrice")),
         "high": data.get("high"),
         "low": data.get("low"),
         "vol": data.get("vol"),
+        "amount": data.get("amount"),
         "rose": data.get("rose"),
         "open": data.get("open"),
         "time": data.get("time"),
@@ -203,9 +206,9 @@ def create_spot_order(
     创建现货订单。
     symbol 例子: BTCUSDT
     side: BUY / SELL
-    order_type: LIMIT / MARKET
+    order_type: LIMIT / MARKET / IOC / FOK / POST_ONLY / STOP
     volume: 数量
-    price: LIMIT 单必填，MARKET 可留空
+    price: LIMIT / STOP 等需要价格时填写
     """
     p = price.strip() if isinstance(price, str) else price
     if p == "":
@@ -256,20 +259,18 @@ def create_withdraw(
     coin: str,
     address: str,
     amount: str,
-    network: str = "",
     memo: str = ""
 ) -> Dict[str, Any]:
     """
     发起提现。
-    network 和 memo 可留空。
+    注意: 多链币种请直接传真实 symbol，例如 USDTBSC / TUSDT / EUSDT。
     """
     result = withdraw_service.apply_withdraw(
         SPOT_PRIVATE,
         coin,
         address,
         amount,
-        network if network else None,
-        memo if memo else None
+        memo=memo if memo else None
     )
 
     return result
@@ -286,8 +287,8 @@ def get_withdraw_history(
     """
     rows = withdraw_service.withdraw_history(
         SPOT_PRIVATE,
-        coin if coin else None,
-        limit
+        coin=coin if coin else None,
+        limit=limit
     )
 
     return {
@@ -426,13 +427,25 @@ def get_futures_ticker(symbol: str) -> Dict[str, Any]:
     return {
         "contract": contract,
         "last": data.get("last"),
-        "buy": data.get("buy"),
-        "sell": data.get("sell"),
+        "buy": data.get("buy", data.get("bidPrice")),
+        "sell": data.get("sell", data.get("askPrice")),
         "high": data.get("high"),
         "low": data.get("low"),
         "vol": data.get("vol"),
         "rose": data.get("rose"),
         "time": data.get("time"),
+    }
+
+
+@mcp.tool()
+def get_futures_ticker_all() -> Dict[str, Any]:
+    """
+    获取全部合约行情。
+    """
+    data = futures_service.get_ticker_all(FUTURES_PUBLIC)
+    return {
+        "tickers": data,
+        "count": len(data) if isinstance(data, dict) else 0,
     }
 
 
@@ -553,15 +566,16 @@ def get_futures_open_orders(symbol: str) -> Dict[str, Any]:
     normalized = []
     for o in rows:
         normalized.append({
-            "contract": o.get("contractName") or contract,
+            "contract": o.get("contractName") or o.get("symbol") or contract,
             "side": map_side(o.get("side")),
-            "position_type": map_position_type(o.get("positionType")),
+            "type": map_order_type(o.get("type")),
             "price": o.get("price"),
-            "volume": o.get("volume"),
-            "deal_volume": o.get("dealVolume"),
+            "orig_qty": o.get("origQty", o.get("volume")),
+            "executed_qty": o.get("executedQty", o.get("dealVolume")),
+            "avg_price": o.get("avgPrice"),
             "status": map_order_status(o.get("status")),
-            "order_id": o.get("orderId"),
-            "time": o.get("ctimeMs") or o.get("ctime"),
+            "order_id": o.get("orderId") or o.get("orderIdString"),
+            "time": o.get("time") or o.get("transactTime") or o.get("ctimeMs") or o.get("ctime"),
         })
 
     return {
@@ -678,6 +692,46 @@ def create_futures_order(
 
 
 @mcp.tool()
+def create_futures_condition_order(
+    symbol: str,
+    side: str,
+    open_action: str,
+    position_type: int,
+    order_type: str,
+    volume: str,
+    trigger_type: str,
+    trigger_price: str,
+    price: str = ""
+) -> Dict[str, Any]:
+    """
+    创建合约条件单。
+    trigger_type 示例: 3UP / 4DOWN
+    """
+    p = price.strip() if isinstance(price, str) else price
+    if p == "":
+        p = None
+
+    data, result = futures_order_service.create_condition_order(
+        FUTURES_PRIVATE,
+        FUTURES_REGISTRY,
+        symbol,
+        side,
+        open_action,
+        position_type,
+        order_type,
+        volume,
+        trigger_type,
+        trigger_price,
+        p
+    )
+
+    return {
+        "request": data,
+        "result": result,
+    }
+
+
+@mcp.tool()
 def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     """
     撤销合约订单。
@@ -694,6 +748,23 @@ def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     return {
         "contract": contract,
         "order_id": order_id,
+        "result": result,
+    }
+
+
+@mcp.tool()
+def cancel_all_futures_orders(symbol: str = "") -> Dict[str, Any]:
+    """
+    撤销某个合约或全部合约挂单。
+    symbol 留空则尝试撤全部。
+    """
+    result = futures_order_service.cancel_all_orders(
+        FUTURES_PRIVATE,
+        FUTURES_REGISTRY,
+        symbol if symbol else None
+    )
+    return {
+        "symbol": symbol,
         "result": result,
     }
 
