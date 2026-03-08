@@ -20,6 +20,7 @@ from tools import futures_order_service
 from tools import margin_order_service
 from tools import withdraw_service
 from tools import ws_service
+from tools import transfer_service
 
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
@@ -82,14 +83,25 @@ def print_help():
         "  python3 main.py account-nonzero-pretty\n"
         "  python3 main.py account-asset USDT\n"
         "  python3 main.py balance USDT\n"
+        "  python3 main.py exchange-account\n"
+        "  python3 main.py exchange-account-nonzero\n"
+        "  python3 main.py account-by-type 1\n"
         "  python3 main.py open-orders BTCUSDT 20\n"
         "  python3 main.py open-orders-pretty BTCUSDT\n"
         "  python3 main.py order BTCUSDT <orderId>\n"
         "  python3 main.py my-trades BTCUSDT 20\n"
+        "  python3 main.py my-trades-v3 BTCUSDT 20\n"
         "  python3 main.py my-trades-pretty BTCUSDT 10\n"
+        "  python3 main.py history-orders BTCUSDT 20\n"
+        "  python3 main.py history-orders-pretty BTCUSDT 10\n"
         "  python3 main.py test-order BTCUSDT BUY LIMIT 0.001 10000\n"
         "  python3 main.py create-order BTCUSDT BUY LIMIT 0.001 10000\n"
         "  python3 main.py cancel-order BTCUSDT <orderId>\n"
+        "\n划转:\n"
+        "  python3 main.py transfer-spot-to-futures USDT 20\n"
+        "  python3 main.py transfer-futures-to-spot USDT 20\n"
+        "  python3 main.py transfer-history\n"
+        "  python3 main.py transfer-history USDT EXCHANGE FUTURE 20\n"
         "\n提现:\n"
         "  python3 main.py withdraw USDTBSC 0xabc... 20 [memo]\n"
         "  python3 main.py withdraw-history\n"
@@ -271,6 +283,22 @@ def main():
             pretty_print(private_api.account())
             return
 
+        if cmd == "exchange-account":
+            pretty_print(private_api.exchange_account())
+            return
+
+        if cmd == "exchange-account-nonzero":
+            account_data = private_api.exchange_account()
+            balances = account_service.extract_account_balances(account_data)
+            nonzero = account_service.filter_nonzero_balances(balances)
+            pretty_print(nonzero)
+            return
+
+        if cmd == "account-by-type":
+            account_type = sys.argv[2]
+            pretty_print(private_api.account_by_type(account_type))
+            return
+
         if cmd == "account-nonzero":
             account_data = private_api.account()
             balances = account_service.extract_account_balances(account_data)
@@ -329,11 +357,34 @@ def main():
             pretty_print(private_api.my_trades(api_symbol, limit))
             return
 
+        if cmd == "my-trades-v3":
+            symbol = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != "" else None
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 20
+            api_symbol = registry.get_api_symbol(symbol) if symbol else None
+            pretty_print(private_api.my_trades_v3(symbol=api_symbol, limit=limit))
+            return
+
         if cmd == "my-trades-pretty":
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             display_symbol, trades = market_service.get_my_trades_pretty_data(private_api, registry, symbol, limit)
             formatters.print_my_trades_pretty(display_symbol, trades)
+            return
+
+        if cmd == "history-orders":
+            symbol = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != "" else None
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 20
+            api_symbol = registry.get_api_symbol(symbol) if symbol else None
+            pretty_print(private_api.history_orders(symbol=api_symbol, limit=limit))
+            return
+
+        if cmd == "history-orders-pretty":
+            symbol = sys.argv[2]
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+            api_symbol = registry.get_api_symbol(symbol)
+            display_symbol = registry.get_display_symbol(symbol)
+            orders = private_api.history_orders(symbol=api_symbol, limit=limit)
+            formatters.print_open_orders_pretty(display_symbol, orders)
             return
 
         if cmd == "test-order":
@@ -381,6 +432,36 @@ def main():
             order_id = sys.argv[3]
             result = order_service.cancel_order(private_api, registry, symbol, order_id=order_id)
             pretty_print(result)
+            return
+
+        # ===== 划转 =====
+        if cmd == "transfer-spot-to-futures":
+            coin = sys.argv[2]
+            amount = sys.argv[3]
+            pretty_print(transfer_service.transfer_spot_to_futures(private_api, coin, amount))
+            return
+
+        if cmd == "transfer-futures-to-spot":
+            coin = sys.argv[2]
+            amount = sys.argv[3]
+            pretty_print(transfer_service.transfer_futures_to_spot(private_api, coin, amount))
+            return
+
+        if cmd == "transfer-history":
+            coin = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != "" else None
+            from_account = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != "" else None
+            to_account = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] != "" else None
+            limit = int(sys.argv[5]) if len(sys.argv) > 5 else 20
+
+            pretty_print(
+                transfer_service.query_transfer_history(
+                    api=private_api,
+                    coin_symbol=coin,
+                    from_account=from_account,
+                    to_account=to_account,
+                    limit=limit,
+                )
+            )
             return
 
         # ===== 提现 =====
@@ -647,13 +728,13 @@ def main():
             )
 
             print("合约订单参数：")
-            print(f"合约: {data['contractName']}")
-            print(f"方向: {data['side']}")
-            print(f"开平: {data['open']}")
-            print(f"仓位类型: {data['positionType']}")
-            print(f"类型: {data['type']}")
-            print(f"数量: {data['volume']}")
-            if data["price"] is not None:
+            print(f"合约: {data.get('contractName', data.get('contract_name'))}")
+            print(f"方向: {data.get('side')}")
+            print(f"开平: {data.get('open', data.get('open_action'))}")
+            print(f"仓位类型: {data.get('positionType', data.get('position_type'))}")
+            print(f"类型: {data.get('type', data.get('order_type'))}")
+            print(f"数量: {data.get('volume')}")
+            if data.get("price") is not None:
                 print(f"价格: {data['price']}")
             pretty_print(result)
             return
