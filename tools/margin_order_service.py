@@ -1,5 +1,3 @@
-# /www/wwwroot/zke-trading/tools/margin_order_service.py
-
 from .field_mapper import map_spot_order_status, map_order_type
 
 
@@ -42,7 +40,7 @@ def create_order(
     volume,
     price=None,
     new_client_order_id=None,
-    recvwindow=None,
+    recv_window=None,
 ):
     api_symbol = registry.get_api_symbol(symbol)
     display_symbol = registry.get_display_symbol(symbol)
@@ -54,8 +52,8 @@ def create_order(
         "order_type": str(order_type).upper(),
         "volume": str(volume),
         "price": str(price) if price is not None else None,
-        "new_client_order_id": new_client_order_id,
-        "recvwindow": recvwindow,
+        "newClientOrderId": new_client_order_id,
+        "recvWindow": recv_window,
     }
 
     result = api.create_order(
@@ -65,7 +63,7 @@ def create_order(
         volume=volume,
         price=price,
         new_client_order_id=new_client_order_id,
-        recvwindow=recvwindow,
+        recv_window=recv_window,
     )
 
     return data, result
@@ -86,7 +84,7 @@ def order_query(api, registry, symbol, order_id=None, new_client_order_id=None):
     return {
         "symbol": result.get("symbol", api_symbol),
         "order_id": result.get("orderId") or result.get("orderIdString"),
-        "client_order_id": result.get("clientOrderId"),
+        "client_order_id": result.get("clientOrderId") or result.get("clientorderId"),
         "side": _normalize_side_for_margin(result.get("side")),
         "type": map_order_type(result.get("type")),
         "price": result.get("price"),
@@ -114,7 +112,7 @@ def cancel_order(api, registry, symbol, order_id=None, new_client_order_id=None)
     return {
         "symbol": result.get("symbol", api_symbol),
         "order_id": result.get("orderId") or result.get("orderIdString"),
-        "client_order_id": result.get("clientOrderId"),
+        "client_order_id": result.get("clientOrderId") or result.get("clientorderId"),
         "status": map_spot_order_status(result.get("status")),
         "raw": result,
     }
