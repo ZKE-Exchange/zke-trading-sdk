@@ -3,11 +3,12 @@
 set -euo pipefail
 
 echo "======================================"
-echo "Installing ZKE Trading SDK (Local/MCP)"
+echo "Installing ZKE Trading SDK"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
+DEFAULT_BRANCH="main"
 
 SPOT_URL="https://openapi.zke.com"
 FUTURES_URL="https://futuresopenapi.zke.com"
@@ -84,13 +85,21 @@ echo ""
 echo "[3/8] Downloading or updating SDK..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "Updating existing installation"
+    echo "Existing installation detected, updating..."
     cd "$INSTALL_DIR"
-    git pull
+    git fetch --all --tags
+    git reset --hard "origin/$DEFAULT_BRANCH"
 else
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
+
+if [ ! -f "requirements.txt" ]; then
+    echo "ERROR: requirements.txt not found."
+    exit 1
+fi
+
+echo "✓ Repository ready"
 
 echo ""
 echo "[4/8] Creating Python virtual environment..."
@@ -120,39 +129,68 @@ echo ""
 echo "Create API keys at:"
 echo "https://www.zke.com/en_US/personal/apiManagement"
 echo ""
+echo "You can use separate API keys for Spot and Futures."
+echo "If you want to reuse the Spot key for Futures, just press Enter."
+echo ""
 
-API_KEY=""
-API_SECRET=""
+SPOT_API_KEY=""
+SPOT_API_SECRET=""
+FUTURES_API_KEY=""
+FUTURES_API_SECRET=""
 
-prompt_tty "Enter ZKE API Key: " API_KEY
-prompt_tty_secret "Enter ZKE API Secret: " API_SECRET
+prompt_tty "Enter Spot API Key: " SPOT_API_KEY
+prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
 
-if [ -z "$API_KEY" ] || [ -z "$API_SECRET" ]; then
-    echo "ERROR: API key and secret cannot be empty."
+if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
+    echo "ERROR: Spot API key and secret cannot be empty."
     exit 1
+fi
+
+echo ""
+prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
+if [ -z "$FUTURES_API_KEY" ]; then
+    FUTURES_API_KEY="$SPOT_API_KEY"
+    FUTURES_API_SECRET="$SPOT_API_SECRET"
+    echo "✓ Reusing Spot API credentials for Futures"
+else
+    prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
+    if [ -z "$FUTURES_API_SECRET" ]; then
+        echo "ERROR: Futures API secret cannot be empty when Futures API key is provided."
+        exit 1
+    fi
 fi
 
 echo ""
 echo "Generating config.json..."
 
-"$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$API_KEY" "$API_SECRET" << 'PY'
+"$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
 import json
 import sys
 from pathlib import Path
 
-install_dir, spot_url, futures_url, ws_url, recv_window, api_key, api_secret = sys.argv[1:]
+(
+    install_dir,
+    spot_url,
+    futures_url,
+    ws_url,
+    recv_window,
+    spot_api_key,
+    spot_api_secret,
+    futures_api_key,
+    futures_api_secret,
+) = sys.argv[1:]
 
 config = {
     "spot": {
         "base_url": spot_url,
-        "api_key": api_key,
-        "api_secret": api_secret,
+        "api_key": spot_api_key,
+        "api_secret": spot_api_secret,
         "recv_window": int(recv_window),
     },
     "futures": {
         "base_url": futures_url,
-        "api_key": api_key,
-        "api_secret": api_secret,
+        "api_key": futures_api_key,
+        "api_secret": futures_api_secret,
         "recv_window": int(recv_window),
     },
     "ws": {
@@ -168,36 +206,21 @@ print("✓ config.json created")
 PY
 
 echo ""
-echo "[7/8] Restarting local MCP server..."
+echo "[7/8] Running validation checks..."
 
-if pgrep -f "mcp_server.py" >/dev/null 2>&1; then
-    echo "Existing MCP server found. Stopping..."
-    pkill -f "mcp_server.py" || true
-    sleep 1
+python -m py_compile main.py
+echo "✓ main.py syntax check passed"
+
+python -m py_compile mcp_server.py
+echo "✓ mcp_server.py syntax check passed"
+
+echo ""
+echo "Testing Spot public API..."
+if python main.py ping >/dev/null 2>&1; then
+    echo "✓ Spot API connectivity check passed"
 else
-    echo "No existing MCP server"
-fi
-
-START_MCP=""
-prompt_tty "Start MCP server now? (y/n): " START_MCP
-
-if [[ "$START_MCP" == "y" || "$START_MCP" == "Y" ]]; then
-    echo "Starting MCP server..."
-    nohup python mcp_server.py > "$INSTALL_DIR/mcp.log" 2>&1 &
-    MCP_PID=$!
-    sleep 2
-
-    if kill -0 "$MCP_PID" >/dev/null 2>&1; then
-        echo "✓ MCP server started"
-        echo "PID: $MCP_PID"
-        echo "Log file: $INSTALL_DIR/mcp.log"
-    else
-        echo "ERROR: MCP server failed to start"
-        echo "Check log file: $INSTALL_DIR/mcp.log"
-        exit 1
-    fi
-else
-    echo "Skipping MCP startup"
+    echo "WARNING: Spot API connectivity check failed"
+    echo "You can still inspect config.json and test manually."
 fi
 
 echo ""
@@ -220,5 +243,8 @@ echo "Manual MCP start:"
 echo "  cd $INSTALL_DIR"
 echo "  source .venv/bin/activate"
 echo "  python mcp_server.py"
+echo ""
+echo "Manual config file:"
+echo "  $INSTALL_DIR/config.json"
 echo ""
 echo "======================================"
