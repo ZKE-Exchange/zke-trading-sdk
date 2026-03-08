@@ -5,18 +5,21 @@ def map_side(side):
     """
     BUY -> long
     SELL -> short
+    兼容 long/short/buy/sell 原样归一
     """
     if side is None:
         return "-"
 
     s = str(side).strip().upper()
 
-    if s == "BUY":
-        return "long"
-    if s == "SELL":
-        return "short"
+    mapping = {
+        "BUY": "long",
+        "SELL": "short",
+        "LONG": "long",
+        "SHORT": "short",
+    }
 
-    return s.lower()
+    return mapping.get(s, s.lower())
 
 
 def map_open_close(value):
@@ -29,12 +32,12 @@ def map_open_close(value):
 
     s = str(value).strip().upper()
 
-    if s == "OPEN":
-        return "open"
-    if s == "CLOSE":
-        return "close"
+    mapping = {
+        "OPEN": "open",
+        "CLOSE": "close",
+    }
 
-    return s.lower()
+    return mapping.get(s, s.lower())
 
 
 def map_position_type(value):
@@ -58,20 +61,35 @@ def map_position_type(value):
 def map_order_status(value):
     """
     futures status:
-    0 -> init
-    1 -> new
-    2 -> filled
-    3 -> partial
-    4 -> canceled
-    5 -> partial_canceled
-    6 -> error
+    兼容数字 / 字符串状态
     """
+    if value is None:
+        return "-"
+
+    # 先兼容字符串状态
+    s = str(value).strip().upper()
+    str_mapping = {
+        "INIT": "init",
+        "NEW": "new",
+        "PARTIALLY_FILLED": "partial",
+        "PART_FILLED": "partial",
+        "FILLED": "filled",
+        "CANCELED": "canceled",
+        "CANCELLED": "canceled",
+        "PENDING_CANCEL": "pending_cancel",
+        "REJECTED": "rejected",
+        "ERROR": "error",
+    }
+    if s in str_mapping:
+        return str_mapping[s]
+
+    # 再兼容旧数字状态
     try:
         v = int(value)
     except Exception:
-        return str(value)
+        return s.lower()
 
-    mapping = {
+    num_mapping = {
         0: "init",
         1: "new",
         2: "filled",
@@ -81,12 +99,12 @@ def map_order_status(value):
         6: "error",
     }
 
-    return mapping.get(v, str(v))
+    return num_mapping.get(v, str(v))
 
 
 def map_spot_order_status(value):
     """
-    spot status text passthrough -> normalized lowercase
+    spot status -> normalized lowercase
     """
     if value is None:
         return "-"
@@ -96,8 +114,10 @@ def map_spot_order_status(value):
     mapping = {
         "NEW": "new",
         "PARTIALLY_FILLED": "partial",
+        "PART_FILLED": "partial",
         "FILLED": "filled",
         "CANCELED": "canceled",
+        "CANCELLED": "canceled",
         "PENDING_CANCEL": "pending_cancel",
         "REJECTED": "rejected",
     }
@@ -107,8 +127,8 @@ def map_spot_order_status(value):
 
 def map_order_type(value):
     """
-    LIMIT / MARKET -> lowercase normalized
-    some futures historical records may use numbers, keep raw string
+    LIMIT / MARKET / IOC / FOK / POST_ONLY / STOP -> lowercase normalized
+    某些 futures 历史记录可能返回数字，保留原始字符串
     """
     if value is None:
         return "-"
@@ -121,6 +141,7 @@ def map_order_type(value):
         "IOC": "ioc",
         "FOK": "fok",
         "POST_ONLY": "post_only",
+        "STOP": "stop",
     }
 
     return mapping.get(s, s.lower())
