@@ -1,6 +1,6 @@
 # ZKE Trading CLI
 
-The SDK includes a command line interface through `main.py`.
+The ZKE Trading SDK includes a command line interface through `main.py`.
 
 This CLI allows you to interact with ZKE Exchange directly from the terminal.
 
@@ -22,48 +22,50 @@ python main.py ticker BTCUSDT
 
 # Spot Market Commands
 
-Check API connectivity:
+Check API connectivity
 
 ```
 python main.py ping
 ```
 
-Get ticker price:
+Get ticker price
 
 ```
 python main.py ticker BTCUSDT
 ```
 
-Get order book depth:
+Get orderbook depth
 
 ```
 python main.py depth BTCUSDT 20
 ```
 
-Parameters:
+Parameters
 
-- symbol → trading pair
-- depth → number of levels
+| Parameter | Description |
+|----------|-------------|
+| symbol | trading pair |
+| depth | number of orderbook levels |
 
-Example:
+Example
 
 ```
 python main.py depth BTCUSDT 20
 ```
 
-Get recent trades:
+Get recent trades
 
 ```
 python main.py trades BTCUSDT 20
 ```
 
-Get Kline data:
+Get Kline data
 
 ```
 python main.py klines BTCUSDT 1day
 ```
 
-Supported intervals include:
+Supported intervals
 
 ```
 1min
@@ -73,57 +75,65 @@ Supported intervals include:
 1hour
 4hour
 1day
+1week
+1month
 ```
 
 ---
 
 # Account Commands
 
-Get account information:
+Get full account information
 
 ```
 python main.py account
 ```
 
-Get asset balance:
+Get asset balance
 
 ```
 python main.py balance USDT
+```
+
+Show non-zero balances
+
+```
+python main.py balances
 ```
 
 ---
 
 # Spot Order Commands
 
-Get open orders:
+Get open orders
 
 ```
 python main.py open-orders BTCUSDT
 ```
 
-Create order:
+Create order
 
 ```
 python main.py create-order BTCUSDT BUY LIMIT 0.001 10000
 ```
 
-Parameters:
+Parameters
 
 | Parameter | Description |
 |----------|-------------|
 | symbol | trading pair |
 | side | BUY / SELL |
 | type | LIMIT / MARKET |
-| amount | order amount |
+| volume | order amount |
 | price | order price |
 
-Example:
+Example
 
 ```
 python main.py create-order BTCUSDT BUY LIMIT 0.001 10000
 ```
 
-Cancel order:
+Cancel order
 
 ```
 python main.py cancel-order BTCUSDT ORDER_ID
@@ -131,29 +141,61 @@ python main.py cancel-order BTCUSDT ORDER_ID
 
 ---
 
-# Withdraw Commands
+# Asset Transfer Commands
 
-Create withdraw request:
+Transfer assets between accounts
 
 ```
-python main.py withdraw USDTBSC 0xYourAddress 20
+python main.py transfer USDT 10 EXCHANGE FUTURE
 ```
 
-Parameters:
+Parameters
 
 | Parameter | Description |
 |----------|-------------|
-| asset | asset + network |
+| coin | asset symbol |
+| amount | transfer amount |
+| from | source account |
+| to | destination account |
+
+Example
+
+```
+python main.py transfer USDT 10 EXCHANGE FUTURE
+```
+
+Get transfer history
+
+```
+python main.py transfer-history
+```
+
+---
+
+# Withdraw Commands
+
+Create withdraw request
+
+```
+python main.py withdraw USDT BSC 0xYourAddress 20
+```
+
+Parameters
+
+| Parameter | Description |
+|----------|-------------|
+| coin | asset symbol |
+| network | chain name |
 | address | withdrawal address |
 | amount | withdrawal amount |
 
-Example:
+Example
 
 ```
-python main.py withdraw USDTBSC 0xabc123... 20
+python main.py withdraw USDT BSC 0xabc123... 20
 ```
 
-Get withdraw history:
+Get withdraw history
 
 ```
 python main.py withdraw-history
@@ -163,28 +205,46 @@ python main.py withdraw-history
 
 # Futures Commands
 
-Check futures API:
+Check futures API
 
 ```
 python main.py futures-ping
 ```
 
-Get futures ticker:
+Get futures ticker
 
 ```
 python main.py futures-ticker E-BTC-USDT
 ```
 
-Get futures positions:
+Get futures positions
 
 ```
 python main.py futures-positions
 ```
 
-Example:
+Get futures open orders
 
 ```
-python main.py futures-positions
+python main.py futures-open-orders
+```
+
+Get futures trades
+
+```
+python main.py futures-my-trades E-BTC-USDT
+```
+
+Get futures order history
+
+```
+python main.py futures-order-history E-BTC-USDT
+```
+
+Get futures profit history
+
+```
+python main.py futures-profit-history E-BTC-USDT
 ```
 
 ---
@@ -193,44 +253,44 @@ python main.py futures-positions
 
 The CLI also supports WebSocket streaming for real-time market data.
 
-Subscribe to ticker stream:
+Subscribe to ticker stream
 
 ```
 python main.py ws-ticker BTCUSDT 30
 ```
 
-Subscribe to orderbook depth:
+Subscribe to orderbook depth
 
 ```
 python main.py ws-depth BTCUSDT step0 30
 ```
 
-Subscribe to kline stream:
+Subscribe to kline stream
 
 ```
 python main.py ws-kline BTCUSDT 1min 30
 ```
 
-Subscribe to trades stream:
+Subscribe to trades stream
 
 ```
 python main.py ws-trades BTCUSDT 30
 ```
 
-Parameters:
+Parameters
 
 | Parameter | Description |
 |----------|-------------|
 | symbol | trading pair |
 | duration | streaming duration in seconds |
 
-Example:
+Example
 
 ```
 python main.py ws-ticker BTCUSDT 30
 ```
 
-Example output:
+Example output
 
 ```
 {
@@ -244,18 +304,20 @@ Example output:
 
 # Symbol Formats
 
-Spot symbols:
+Spot symbols
 
 ```
 BTCUSDT
 ETHUSDT
+SOLUSDT
 ```
 
-Futures symbols:
+Futures symbols
 
 ```
 E-BTC-USDT
 E-ETH-USDT
+E-SOL-USDT
 ```
 
 ---
@@ -268,15 +330,15 @@ E-ETH-USDT
 
 ---
 
-# Related Documentation
+# Related Commands
 
-MCP server usage:
+Run MCP server
 
 ```
 python mcp_server.py
 ```
 
-OpenClaw plugin installation:
+Install OpenClaw plugin
 
 ```
 curl -s https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh | bash
