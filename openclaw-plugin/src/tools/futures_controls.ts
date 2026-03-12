@@ -1,4 +1,4 @@
-import { runMainJson, requireTradingApproval } from "../python.js";
+import { runMainJson } from "../python.js";
 import type { PluginConfig, ToolSpec } from "../types.js";
 
 export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
@@ -17,7 +17,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false
       },
       execute: async ({ symbol, position_model }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["futures-edit-position-mode", String(symbol), String(position_model)],
           config
@@ -38,7 +37,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false
       },
       execute: async ({ symbol, margin_model }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["futures-edit-margin-mode", String(symbol), String(margin_model)],
           config
@@ -59,7 +57,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false
       },
       execute: async ({ position_id, amount }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["futures-edit-position-margin", String(position_id), String(amount)],
           config
@@ -80,7 +77,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false
       },
       execute: async ({ symbol, now_level }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["futures-edit-leverage", String(symbol), String(now_level)],
           config
