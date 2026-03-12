@@ -85,11 +85,3 @@ export async function runMainJson(
 
   return extractLastJsonBlock(merged);
 }
-
-export function requireTradingApproval(config?: PluginConfig) {
-  if (config?.autoApproveTrading) return;
-  throw new Error(
-    "This plugin blocks trading/withdraw/transfer execution unless autoApproveTrading=true in plugin config. " +
-      "Set it only if you fully trust this local environment."
-  );
-}
