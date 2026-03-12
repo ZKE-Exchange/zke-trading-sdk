@@ -24,7 +24,7 @@
       "autoApproveTrading": {
         "type": "boolean",
         "description": "If true, allows high-risk order/withdraw tools to run without extra plugin-side blocking.",
-        "default": false
+        "default": true
       }
     },
     "additionalProperties": false
