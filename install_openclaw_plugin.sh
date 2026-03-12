@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -euo pipefail
+# 移除 pipefail，放宽限制，防止管道误杀
+set -eu
 
 echo "======================================"
 echo "Installing ZKE OpenClaw Plugin"
@@ -41,7 +42,7 @@ prompt_tty_secret() {
 }
 
 # ==========================================
-# 1. 最优先：找到高版本 Python
+# 0. 寻找 Python (提前到最前面)
 # ==========================================
 find_python() {
     for PY in python3 python3.13 python3.12 python3.11 python3.10; do
@@ -62,16 +63,16 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 # ==========================================
-# 2. 终极防弹清理逻辑 (带安全气囊)
+# 1. 独立且防弹的清理模块
 # ==========================================
 cleanup_existing_plugin() {
-    echo "Cleaning up existing plugin installation..."
-    set +e # 关闭致命报错，防止清理过程意外终止脚本
-
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1
-    rm -rf "$OPENCLAW_EXT_DIR"
-    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
+    echo "Cleaning up existing plugin records..."
+    
+    # 每一句都加上 || true，绝对禁止报错退出
+    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
+    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    rm -rf "$OPENCLAW_EXT_DIR" || true
+    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
 
     if [ -f "$OPENCLAW_CONFIG" ]; then
         "$PYTHON_BIN" -c '
@@ -91,14 +92,23 @@ try:
     if modified:
         with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
 except Exception: pass
-' "$OPENCLAW_CONFIG" "$PLUGIN_ID"
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
     fi
 
-    set -e # 恢复正常报错监控
+    # 强制返回 0，告诉 Bash “清理成功，不准退出脚本”
+    return 0 
 }
 
+# 支持静默卸载模式 (满足你说的“功能分开”)
+if [ "${1:-}" == "--uninstall" ]; then
+    cleanup_existing_plugin
+    rm -rf "$INSTALL_DIR" || true
+    echo "Uninstallation complete!"
+    exit 0
+fi
+
 # ==========================================
-# 3. 菜单交互
+# 2. 交互菜单
 # ==========================================
 IS_SDK_INSTALLED=false
 IS_PLUGIN_REGISTERED=false
@@ -122,15 +132,15 @@ if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
     case "$MENU_CHOICE" in
         1)
             echo "Starting update process..."
-            cleanup_existing_plugin
+            cleanup_existing_plugin || true
             ;;
         2)
             echo "Starting full reset..."
-            cleanup_existing_plugin
-            rm -rf "$INSTALL_DIR"
+            cleanup_existing_plugin || true
+            rm -rf "$INSTALL_DIR" || true
             ;;
         3)
-            cleanup_existing_plugin
+            cleanup_existing_plugin || true
             echo "Uninstallation complete. Exiting."
             exit 0
             ;;
@@ -142,7 +152,7 @@ if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
 fi
 
 # ==========================================
-# 4. 执行核心安装步骤
+# 3. 安装主流程
 # ==========================================
 echo ""
 echo "[1/9] Checking dependencies..."
@@ -152,7 +162,6 @@ for cmd in git npm openclaw; do
         exit 1
     fi
 done
-echo "✓ All core tools detected"
 
 echo ""
 echo "[2/9] Python version check..."
@@ -237,7 +246,7 @@ try:
         allow.append(pid)
         with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
 except Exception: pass
-' "$OPENCLAW_CONFIG" "$PLUGIN_ID"
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
 
 openclaw gateway --force
 
