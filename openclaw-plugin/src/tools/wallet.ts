@@ -6,7 +6,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_transfer_spot_to_futures",
       description: "Transfer assets from ZKE spot account to futures account",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -26,7 +25,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_transfer_futures_to_spot",
       description: "Transfer assets from ZKE futures account to spot account",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -86,7 +84,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_create_withdraw",
       description: "Create a ZKE withdrawal request",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
