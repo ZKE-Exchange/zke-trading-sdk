@@ -57,7 +57,7 @@ curl -s https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/inst
 Install OpenClaw plugin
 
 ```bash
-curl -s https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh | bash
+bash <(curl -s "https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh?v=$RANDOM")
 ```
 
 ---
