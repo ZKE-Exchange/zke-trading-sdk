@@ -171,7 +171,6 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_create_spot_order",
       description: "Create a ZKE spot order",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -201,7 +200,6 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_cancel_spot_order",
       description: "Cancel a ZKE spot order by order id",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
