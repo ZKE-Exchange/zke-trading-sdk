@@ -40,10 +40,12 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
+# --- 核心抗体 1：安全清理逻辑，防止 OpenClaw 死锁 ---
 cleanup_existing_plugin() {
     echo "Cleaning up existing plugin installation..."
     openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
     openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    
     rm -rf "$OPENCLAW_EXT_DIR"
     rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
 
@@ -68,17 +70,19 @@ try:
     if modified:
         with open(cfg_path, 'w') as f:
             json.dump(data, f, indent=2)
-except Exception:
-    pass
+except Exception: pass
 PY
     fi
 }
 
-# Check for existing installation
+# --- 菜单交互流程 ---
 IS_SDK_INSTALLED=false
-if [ -d "$INSTALL_DIR" ]; then IS_SDK_INSTALLED=true; fi
+IS_PLUGIN_REGISTERED=false
 
-if $IS_SDK_INSTALLED; then
+if [ -d "$INSTALL_DIR" ]; then IS_SDK_INSTALLED=true; fi
+if [ -d "$OPENCLAW_EXT_DIR" ]; then IS_PLUGIN_REGISTERED=true; fi
+
+if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
     echo ""
     echo "Existing ZKE Trading installation detected."
     echo ""
@@ -92,18 +96,41 @@ if $IS_SDK_INSTALLED; then
     prompt_tty "Enter choice [1-4]: " MENU_CHOICE
 
     case "$MENU_CHOICE" in
-        1) cleanup_existing_plugin ;;
-        2) cleanup_existing_plugin; rm -rf "$INSTALL_DIR" ;;
-        3) cleanup_existing_plugin; exit 0 ;;
-        4|*) exit 0 ;;
+        1)
+            echo "Starting update process..."
+            cleanup_existing_plugin
+            ;; # 注意这里不写 exit，让它自然向下执行安装步骤
+        2)
+            echo "Starting full reset..."
+            cleanup_existing_plugin
+            echo "Removing SDK directory: $INSTALL_DIR"
+            rm -rf "$INSTALL_DIR"
+            ;;
+        3)
+            cleanup_existing_plugin
+            echo "Uninstallation complete. Exiting."
+            exit 0
+            ;;
+        4|*)
+            echo "Operation cancelled."
+            exit 0
+            ;;
     esac
 fi
 
+# ==========================================
+# 标准安装流程开始 (1/9 到 9/9)
+# ==========================================
+
 echo ""
 echo "[1/9] Checking dependencies..."
-if ! command -v git >/dev/null 2>&1; then echo "ERROR: git is required."; exit 1; fi
-if ! command -v npm >/dev/null 2>&1; then echo "ERROR: npm is required."; exit 1; fi
-if ! command -v openclaw >/dev/null 2>&1; then echo "ERROR: openclaw CLI is required."; exit 1; fi
+for cmd in git npm openclaw; do
+    if ! command -v $cmd >/dev/null 2>&1; then
+        echo "ERROR: $cmd is required."
+        exit 1
+    fi
+done
+echo "✓ core tools detected"
 
 echo ""
 echo "[2/9] Detecting compatible Python..."
@@ -140,33 +167,46 @@ else
     git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
+echo "✓ Repository ready"
 
 echo ""
 echo "[4/9] Creating Python virtual environment..."
 [ -d ".venv" ] && rm -rf .venv
 "$PYTHON_BIN" -m venv .venv
 
+# 定义虚拟环境内部 Python 的绝对路径，杜绝环境串扰
+VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
+
 echo ""
 echo "[5/9] Installing Python dependencies..."
-# 这里是核心修正点：直接使用虚拟环境内的 pip 路径，确保版本正确
-./.venv/bin/python -m pip install --upgrade pip
-./.venv/bin/python -m pip install -r requirements.txt
-
+# --- 核心抗体 2：强制使用 VENV_PYTHON，解决依赖报错 ---
+"$VENV_PYTHON" -m pip install --upgrade pip
+"$VENV_PYTHON" -m pip install -r requirements.txt
 echo "✓ Python dependencies installed"
 
 echo ""
 echo "[6/9] API Configuration"
 if [ ! -f "$INSTALL_DIR/config.json" ]; then
+    echo ""
     prompt_tty "Enter Spot API Key: " SPOT_API_KEY
     prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
-    prompt_tty "Enter Futures API Key (Enter to reuse): " FUTURES_API_KEY
+
+    if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
+        echo "ERROR: API credentials cannot be empty."
+        exit 1
+    fi
+
+    echo ""
+    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
     if [ -z "$FUTURES_API_KEY" ]; then
-        FUTURES_API_KEY="$SPOT_API_KEY"; FUTURES_API_SECRET="$SPOT_API_SECRET"
+        FUTURES_API_KEY="$SPOT_API_KEY"
+        FUTURES_API_SECRET="$SPOT_API_SECRET"
     else
         prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
     fi
 
-    ./.venv/bin/python - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
+    # 使用虚拟环境的 Python 生成配置
+    "$VENV_PYTHON" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
 import json, sys
 from pathlib import Path
 args = sys.argv[1:]
@@ -178,19 +218,41 @@ config = {
 with open(Path(args[0]) / "config.json", "w") as f:
     json.dump(config, f, indent=2)
 PY
+    echo "✓ config.json created"
+else
+    echo "✓ Existing config.json found. Skipping API configuration."
 fi
 
 echo ""
 echo "[7/9] Building OpenClaw plugin..."
 cd "$INSTALL_DIR/openclaw-plugin"
-npm install && npm run build
+npm install
+npm run build
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
+# 此时旧记录已被清理，不会报错
 openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
 echo ""
 echo "[9/9] Finalizing..."
+# --- 核心抗体 3：最后再加固一次 allow 列表 ---
+python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+path = sys.argv[1]
+pid = sys.argv[2]
+if os.path.exists(path):
+    with open(path, 'r') as f: data = json.load(f)
+    allow = data.setdefault("plugins", {}).setdefault("allow", [])
+    if pid not in allow:
+        allow.append(pid)
+        with open(path, 'w') as f: json.dump(data, f, indent=2)
+PY
+
 openclaw gateway --force
-echo "✅ Installation Complete."
+
+echo ""
+echo "======================================"
+echo "ZKE OpenClaw Plugin Installation Complete"
+echo "======================================"
