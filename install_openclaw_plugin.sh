@@ -21,46 +21,56 @@ OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 
 # ==========================================
-# 模式 A: 纯净卸载逻辑 (仅在传入 --uninstall 时执行)
+# 杀手锏：使用 Node.js 强行清洗配置 (100% 成功率)
+# ==========================================
+scrub_json_config() {
+    if command -v node >/dev/null 2>&1 && [ -f "$OPENCLAW_CONFIG" ]; then
+        node -e "
+        const fs = require('fs');
+        try {
+            const p = '$OPENCLAW_CONFIG';
+            const pid = '$PLUGIN_ID';
+            let data = JSON.parse(fs.readFileSync(p, 'utf8'));
+            let modified = false;
+            if (data.plugins) {
+                if (data.plugins.entries && data.plugins.entries[pid]) {
+                    delete data.plugins.entries[pid];
+                    modified = true;
+                }
+                if (data.plugins.allow && data.plugins.allow.includes(pid)) {
+                    data.plugins.allow = data.plugins.allow.filter(x => x !== pid);
+                    modified = true;
+                }
+            }
+            if (modified) {
+                fs.writeFileSync(p, JSON.stringify(data, null, 2));
+                console.log('✓ Auto-fixed dirty OpenClaw config file');
+            }
+        } catch (e) {}
+        " || true
+    fi
+}
+
+# ==========================================
+# 模式 A: 纯净卸载
 # ==========================================
 if [ "${1:-}" == "--uninstall" ]; then
     echo "Starting uninstallation..."
     
-    # 物理清理文件 (加 || true 防止因文件不存在报错)
     openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
     openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
     rm -rf "$OPENCLAW_EXT_DIR" || true
     rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
     rm -rf "$INSTALL_DIR" || true
 
-    # 安全清理配置文件死锁
-    if [ -f "$OPENCLAW_CONFIG" ]; then
-        python3 -c '
-import json, sys
-try:
-    with open(sys.argv[1], "r") as f: data = json.load(f)
-    pid = sys.argv[2]
-    modified = False
-    if "plugins" in data:
-        if pid in data.get("plugins", {}).get("entries", {}):
-            del data["plugins"]["entries"][pid]
-            modified = True
-        allow = data.get("plugins", {}).get("allow", [])
-        if pid in allow:
-            data["plugins"]["allow"] = [p for p in allow if p != pid]
-            modified = True
-    if modified:
-        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
-except Exception: pass
-' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
-    fi
+    scrub_json_config
 
     echo "✅ Uninstallation complete! You can now run a fresh install."
     exit 0
 fi
 
 # ==========================================
-# 防呆拦截：如果已安装，阻止并提示先卸载
+# 防呆拦截
 # ==========================================
 if [ -d "$INSTALL_DIR" ] || [ -d "$OPENCLAW_EXT_DIR" ]; then
     echo "⚠️  Existing installation detected."
@@ -72,7 +82,7 @@ if [ -d "$INSTALL_DIR" ] || [ -d "$OPENCLAW_EXT_DIR" ]; then
 fi
 
 # ==========================================
-# 模式 B: 全新安装逻辑 (默认执行)
+# 模式 B: 全新安装
 # ==========================================
 prompt_tty() {
     local prompt="$1"
@@ -97,7 +107,7 @@ prompt_tty_secret() {
 
 echo ""
 echo "[1/9] Checking dependencies..."
-for cmd in git npm openclaw python3; do
+for cmd in git npm openclaw python3 node; do
     if ! command -v $cmd >/dev/null 2>&1; then
         echo "ERROR: $cmd is required."
         exit 1
@@ -175,23 +185,28 @@ npm run build
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
+# 👉 战前推土机：在安装的前一秒，强行铲除配置死锁
+scrub_json_config
+
 openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
 echo ""
 echo "[9/9] Finalizing..."
-# 确保配置写入 allow 列表
-"$PYTHON_BIN" -c '
-import json, sys, os
-try:
-    with open(sys.argv[1], "r") as f: data = json.load(f)
-    pid = sys.argv[2]
-    allow = data.setdefault("plugins", {}).setdefault("allow", [])
-    if pid not in allow:
-        allow.append(pid)
-        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
-except Exception: pass
-' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
+# 双重保险：安装后用 Node 强制写入白名单
+node -e "
+const fs = require('fs');
+try {
+    const p = '$OPENCLAW_CONFIG';
+    let data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!data.plugins) data.plugins = {};
+    if (!data.plugins.allow) data.plugins.allow = [];
+    if (!data.plugins.allow.includes('$PLUGIN_ID')) {
+        data.plugins.allow.push('$PLUGIN_ID');
+        fs.writeFileSync(p, JSON.stringify(data, null, 2));
+    }
+} catch (e) {}
+" || true
 
 openclaw gateway --force
 
