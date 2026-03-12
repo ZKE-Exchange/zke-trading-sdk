@@ -184,21 +184,17 @@ echo ""
 echo "[6/9] API Configuration"
 if [ ! -f "$INSTALL_DIR/config.json" ]; then
     echo ""
-    prompt_tty "Enter Spot API Key: " SPOT_API_KEY
-    prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
-
-    if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
-        echo "ERROR: API credentials cannot be empty."
-        exit 1
-    fi
+    echo "You can leave API keys blank and configure them later in $INSTALL_DIR/config.json"
+    prompt_tty "Enter Spot API Key (press Enter to skip): " SPOT_API_KEY
+    prompt_tty_secret "Enter Spot API Secret (press Enter to skip): " SPOT_API_SECRET
 
     echo ""
-    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
+    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key or skip): " FUTURES_API_KEY
     if [ -z "$FUTURES_API_KEY" ]; then
         FUTURES_API_KEY="$SPOT_API_KEY"
         FUTURES_API_SECRET="$SPOT_API_SECRET"
     else
-        prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
+        prompt_tty_secret "Enter Futures API Secret (press Enter to skip): " FUTURES_API_SECRET
     fi
 
     "$VENV_PYTHON" -c '
