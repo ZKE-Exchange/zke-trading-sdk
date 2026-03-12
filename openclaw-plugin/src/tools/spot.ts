@@ -1,4 +1,4 @@
-import { runMainJson, requireTradingApproval } from "../python.js";
+import { runMainJson } from "../python.js";
 import type { PluginConfig, ToolSpec } from "../types.js";
 
 export function createSpotTools(config?: PluginConfig): ToolSpec[] {
@@ -185,7 +185,6 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, side, order_type, volume, price = "" }) => {
-        requireTradingApproval(config);
         const args = [
           "create-order",
           String(symbol),
@@ -213,7 +212,6 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
-        requireTradingApproval(config);
         return await runMainJson(["cancel-order", String(symbol), String(order_id)], config);
       },
     },
