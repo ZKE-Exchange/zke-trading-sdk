@@ -40,42 +40,66 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
-# --- 核心抗体 1：安全清理逻辑，防止 OpenClaw 死锁 ---
+# ==========================================
+# 1. 最优先：找到高版本 Python
+# ==========================================
+find_python() {
+    for PY in python3 python3.13 python3.12 python3.11 python3.10; do
+        if command -v "$PY" >/dev/null 2>&1; then
+            if "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+                echo "$PY"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+PYTHON_BIN="$(find_python || echo "")"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "ERROR: Python 3.10+ not found. Please install it first."
+    exit 1
+fi
+
+# ==========================================
+# 2. 终极防弹清理逻辑 (带安全气囊)
+# ==========================================
 cleanup_existing_plugin() {
     echo "Cleaning up existing plugin installation..."
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
-    
+    set +e # 关闭致命报错，防止清理过程意外终止脚本
+
+    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1
+    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1
     rm -rf "$OPENCLAW_EXT_DIR"
     rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
 
     if [ -f "$OPENCLAW_CONFIG" ]; then
-        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+        "$PYTHON_BIN" -c '
 import json, sys, os
-cfg_path = sys.argv[1]
-pid = sys.argv[2]
 try:
-    with open(cfg_path, 'r') as f:
-        data = json.load(f)
+    with open(sys.argv[1], "r") as f: data = json.load(f)
+    pid = sys.argv[2]
     modified = False
     if "plugins" in data:
-        entries = data.get("plugins", {}).get("entries", {})
-        if pid in entries:
-            del entries[pid]
+        if pid in data.get("plugins", {}).get("entries", {}):
+            del data["plugins"]["entries"][pid]
             modified = True
         allow = data.get("plugins", {}).get("allow", [])
         if pid in allow:
             data["plugins"]["allow"] = [p for p in allow if p != pid]
             modified = True
     if modified:
-        with open(cfg_path, 'w') as f:
-            json.dump(data, f, indent=2)
+        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
 except Exception: pass
-PY
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID"
     fi
+
+    set -e # 恢复正常报错监控
 }
 
-# --- 菜单交互流程 ---
+# ==========================================
+# 3. 菜单交互
+# ==========================================
 IS_SDK_INSTALLED=false
 IS_PLUGIN_REGISTERED=false
 
@@ -99,11 +123,10 @@ if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
         1)
             echo "Starting update process..."
             cleanup_existing_plugin
-            ;; # 注意这里不写 exit，让它自然向下执行安装步骤
+            ;;
         2)
             echo "Starting full reset..."
             cleanup_existing_plugin
-            echo "Removing SDK directory: $INSTALL_DIR"
             rm -rf "$INSTALL_DIR"
             ;;
         3)
@@ -119,9 +142,8 @@ if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
 fi
 
 # ==========================================
-# 标准安装流程开始 (1/9 到 9/9)
+# 4. 执行核心安装步骤
 # ==========================================
-
 echo ""
 echo "[1/9] Checking dependencies..."
 for cmd in git npm openclaw; do
@@ -130,32 +152,11 @@ for cmd in git npm openclaw; do
         exit 1
     fi
 done
-echo "✓ core tools detected"
+echo "✓ All core tools detected"
 
 echo ""
-echo "[2/9] Detecting compatible Python..."
-find_python() {
-    for PY in python3 python3.13 python3.12 python3.11 python3.10; do
-        if command -v "$PY" >/dev/null 2>&1; then
-            if "$PY" - << 'PY' >/dev/null 2>&1
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
-PY
-            then
-                echo "$PY"
-                return 0
-            fi
-        fi
-    done
-    return 1
-}
-
-if PYTHON_BIN="$(find_python)"; then
-    echo "✓ Using Python: $PYTHON_BIN"
-else
-    echo "ERROR: Python 3.10+ not found."
-    exit 1
-fi
+echo "[2/9] Python version check..."
+echo "✓ Using Python: $PYTHON_BIN"
 
 echo ""
 echo "[3/9] Downloading or updating SDK..."
@@ -167,22 +168,17 @@ else
     git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
-echo "✓ Repository ready"
 
 echo ""
 echo "[4/9] Creating Python virtual environment..."
 [ -d ".venv" ] && rm -rf .venv
 "$PYTHON_BIN" -m venv .venv
-
-# 定义虚拟环境内部 Python 的绝对路径，杜绝环境串扰
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 
 echo ""
 echo "[5/9] Installing Python dependencies..."
-# --- 核心抗体 2：强制使用 VENV_PYTHON，解决依赖报错 ---
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install -r requirements.txt
-echo "✓ Python dependencies installed"
 
 echo ""
 echo "[6/9] API Configuration"
@@ -205,8 +201,7 @@ if [ ! -f "$INSTALL_DIR/config.json" ]; then
         prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
     fi
 
-    # 使用虚拟环境的 Python 生成配置
-    "$VENV_PYTHON" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
+    "$VENV_PYTHON" -c '
 import json, sys
 from pathlib import Path
 args = sys.argv[1:]
@@ -217,7 +212,7 @@ config = {
 }
 with open(Path(args[0]) / "config.json", "w") as f:
     json.dump(config, f, indent=2)
-PY
+' "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET"
     echo "✓ config.json created"
 else
     echo "✓ Existing config.json found. Skipping API configuration."
@@ -231,28 +226,26 @@ npm run build
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
-# 此时旧记录已被清理，不会报错
 openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
 echo ""
 echo "[9/9] Finalizing..."
-# --- 核心抗体 3：最后再加固一次 allow 列表 ---
-python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+"$PYTHON_BIN" -c '
 import json, sys, os
-path = sys.argv[1]
-pid = sys.argv[2]
-if os.path.exists(path):
-    with open(path, 'r') as f: data = json.load(f)
+try:
+    with open(sys.argv[1], "r") as f: data = json.load(f)
+    pid = sys.argv[2]
     allow = data.setdefault("plugins", {}).setdefault("allow", [])
     if pid not in allow:
         allow.append(pid)
-        with open(path, 'w') as f: json.dump(data, f, indent=2)
-PY
+        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
+except Exception: pass
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID"
 
 openclaw gateway --force
 
 echo ""
 echo "======================================"
-echo "ZKE OpenClaw Plugin Installation Complete"
+echo "✅ ZKE OpenClaw Plugin Installation Complete"
 echo "======================================"
