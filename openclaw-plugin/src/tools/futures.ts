@@ -1,4 +1,4 @@
-import { runMainJson, requireTradingApproval } from "../python.js";
+import { runMainJson } from "../python.js";
 import type { PluginConfig, ToolSpec } from "../types.js";
 
 export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
@@ -176,7 +176,6 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         volume,
         price = "",
       }) => {
-        requireTradingApproval(config);
         const args = [
           "futures-create-order",
           String(symbol),
@@ -232,7 +231,6 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         trigger_price,
         price = "",
       }) => {
-        requireTradingApproval(config);
         const args = [
           "futures-condition-order",
           String(symbol),
@@ -264,7 +262,6 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
-        requireTradingApproval(config);
         return await runMainJson(["futures-cancel-order", String(symbol), String(order_id)], config);
       },
     },
@@ -280,7 +277,6 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol = "" }) => {
-        requireTradingApproval(config);
         if (String(symbol).trim()) {
           return await runMainJson(["futures-cancel-all-orders", String(symbol)], config);
         }
