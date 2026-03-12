@@ -1,4 +1,4 @@
-import { runMainJson, requireTradingApproval } from "../python.js";
+import { runMainJson } from "../python.js";
 import type { PluginConfig, ToolSpec } from "../types.js";
 
 export function createWalletTools(config?: PluginConfig): ToolSpec[] {
@@ -17,7 +17,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ coin, amount }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["transfer-spot-to-futures", String(coin), String(amount)],
           config
@@ -38,7 +37,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ coin, amount }) => {
-        requireTradingApproval(config);
         return await runMainJson(
           ["transfer-futures-to-spot", String(coin), String(amount)],
           config
@@ -101,7 +99,6 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ coin, address, amount, memo = "" }) => {
-        requireTradingApproval(config);
         const args = ["withdraw", String(coin), String(address), String(amount)];
         if (String(memo).trim()) {
           args.push(String(memo));
