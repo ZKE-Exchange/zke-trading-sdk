@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "======================================"
 echo "ZKE OpenClaw Plugin Installer"
@@ -16,6 +16,7 @@ WS_URL="wss://ws.zke.com/kline-api/ws"
 RECV_WINDOW="5000"
 
 OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
+# 使用你指定的绝对路径
 OPENCLAW_CONFIG="/Users/openclaw/.openclaw/openclaw.json"
 
 prompt_tty() {
@@ -39,18 +40,29 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
+echo "Please select an action:"
+echo "  1) Fresh Install (全新安装)"
+echo "  2) Uninstall (彻底卸载，修复配置死锁)"
+echo "  3) Cancel (取消)"
+echo ""
+
+prompt_tty "Enter choice [1-3]: " MENU_CHOICE
+
 # ==========================================
-# 核心清理模块 (解决插件残留报错)
+# 选 2: 彻底卸载与修复流程
 # ==========================================
-do_uninstall() {
-    echo "Cleaning up files and configurations..."
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+if [ "$MENU_CHOICE" == "2" ]; then
+    echo "Starting deep uninstallation..."
+    
+    # 加上 < /dev/null 防止管道吞噬代码
+    openclaw plugins disable "$PLUGIN_ID" < /dev/null >/dev/null 2>&1 || true
+    openclaw plugins uninstall "$PLUGIN_ID" < /dev/null >/dev/null 2>&1 || true
     
     rm -rf "$OPENCLAW_EXT_DIR" || true
     rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
     rm -rf "$INSTALL_DIR" || true
 
+    # 外科手术清理 JSON 幽灵记录
     if [ -f "$OPENCLAW_CONFIG" ]; then
         python3 -c '
 import json, sys
@@ -71,24 +83,10 @@ try:
 except Exception: pass
 ' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
     fi
-    echo "✓ Cleanup complete."
-}
-
-# ==========================================
-# 开局二选一菜单
-# ==========================================
-echo "Please select an action:"
-echo "  1) Fresh Install (全新安装)"
-echo "  2) Uninstall (彻底卸载)"
-echo "  3) Cancel (取消)"
-echo ""
-
-prompt_tty "Enter choice [1-3]: " MENU_CHOICE
-
-if [ "$MENU_CHOICE" == "2" ]; then
-    do_uninstall
-    echo "✅ Uninstallation successful. Exiting."
+    echo "✅ Uninstallation and config repair successful."
+    echo "You can now run the script again to select [1] Fresh Install."
     exit 0
+
 elif [ "$MENU_CHOICE" == "3" ]; then
     echo "Operation cancelled."
     exit 0
@@ -98,9 +96,8 @@ elif [ "$MENU_CHOICE" != "1" ]; then
 fi
 
 # ==========================================
-# 选 1: 全新安装流程 (先强行清理，再走 1-9 步)
+# 选 1: 纯粹的全新安装流程 (不干涉用户的清理操作)
 # ==========================================
-do_uninstall
 echo "Starting fresh installation..."
 
 echo ""
@@ -183,12 +180,13 @@ npm run build
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
-openclaw plugins install .
-openclaw plugins enable "$PLUGIN_ID"
+# 加上 < /dev/null 防止管道吞噬代码
+openclaw plugins install . < /dev/null
+openclaw plugins enable "$PLUGIN_ID" < /dev/null
 
 echo ""
 echo "[9/9] Finalizing..."
-openclaw gateway --force
+openclaw gateway --force < /dev/null
 
 echo ""
 echo "======================================"
