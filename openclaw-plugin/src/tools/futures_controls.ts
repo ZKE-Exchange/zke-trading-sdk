@@ -6,7 +6,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_edit_futures_position_mode",
       description: "Edit ZKE futures position mode",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -26,7 +25,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_edit_futures_margin_mode",
       description: "Edit ZKE futures margin mode",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -46,7 +44,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_adjust_futures_position_margin",
       description: "Adjust ZKE futures position margin",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -66,7 +63,6 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_edit_futures_leverage",
       description: "Edit ZKE futures leverage",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
