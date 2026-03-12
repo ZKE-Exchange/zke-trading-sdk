@@ -40,12 +40,43 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
+# ==========================================
+# [修复点] 深度清理函数，同时清理物理文件和 JSON 配置
+# ==========================================
 cleanup_existing_plugin() {
     echo "Cleaning up existing plugin installation..."
     openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
     openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    
+    # 清理物理文件
     rm -rf "$OPENCLAW_EXT_DIR"
     rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
+
+    # 深度清理 openclaw.json 中的残留记录，防止安装时报错
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+cfg_path = sys.argv[1]
+pid = sys.argv[2]
+if os.path.exists(cfg_path):
+    try:
+        with open(cfg_path, 'r') as f:
+            data = json.load(f)
+        modified = False
+        if "plugins" in data:
+            if "entries" in data["plugins"] and pid in data["plugins"]["entries"]:
+                del data["plugins"]["entries"][pid]
+                modified = True
+            if "allow" in data["plugins"] and pid in data["plugins"]["allow"]:
+                data["plugins"]["allow"].remove(pid)
+                modified = True
+        if modified:
+            with open(cfg_path, 'w') as f:
+                json.dump(data, f, indent=2)
+    except Exception:
+        pass
+PY
+    fi
 }
 
 # Check for existing installation
@@ -350,15 +381,8 @@ if cfg_path.exists():
 else:
     data = {}
 
-plugins = data.get("plugins")
-if not isinstance(plugins, dict):
-    plugins = {}
-    data["plugins"] = plugins
-
-allow = plugins.get("allow")
-if not isinstance(allow, list):
-    allow = []
-    plugins["allow"] = allow
+plugins = data.setdefault("plugins", {})
+allow = plugins.setdefault("allow", [])
 
 if plugin_id not in allow:
     allow.append(plugin_id)
