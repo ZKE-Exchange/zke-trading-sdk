@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# 移除 pipefail，放宽限制，防止管道误杀
+# 开启严格报错模式
 set -eu
 
 echo "======================================"
-echo "Installing ZKE OpenClaw Plugin"
+echo "ZKE OpenClaw Plugin Installer"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
@@ -20,6 +20,60 @@ RECV_WINDOW="5000"
 OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 
+# ==========================================
+# 模式 A: 纯净卸载逻辑 (仅在传入 --uninstall 时执行)
+# ==========================================
+if [ "${1:-}" == "--uninstall" ]; then
+    echo "Starting uninstallation..."
+    
+    # 物理清理文件 (加 || true 防止因文件不存在报错)
+    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
+    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    rm -rf "$OPENCLAW_EXT_DIR" || true
+    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
+    rm -rf "$INSTALL_DIR" || true
+
+    # 安全清理配置文件死锁
+    if [ -f "$OPENCLAW_CONFIG" ]; then
+        python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], "r") as f: data = json.load(f)
+    pid = sys.argv[2]
+    modified = False
+    if "plugins" in data:
+        if pid in data.get("plugins", {}).get("entries", {}):
+            del data["plugins"]["entries"][pid]
+            modified = True
+        allow = data.get("plugins", {}).get("allow", [])
+        if pid in allow:
+            data["plugins"]["allow"] = [p for p in allow if p != pid]
+            modified = True
+    if modified:
+        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
+except Exception: pass
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
+    fi
+
+    echo "✅ Uninstallation complete! You can now run a fresh install."
+    exit 0
+fi
+
+# ==========================================
+# 防呆拦截：如果已安装，阻止并提示先卸载
+# ==========================================
+if [ -d "$INSTALL_DIR" ] || [ -d "$OPENCLAW_EXT_DIR" ]; then
+    echo "⚠️  Existing installation detected."
+    echo "To avoid conflicts, please uninstall the existing version first by running:"
+    echo ""
+    echo "curl -s \"https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh?v=\$RANDOM\" | bash -s -- --uninstall"
+    echo ""
+    exit 1
+fi
+
+# ==========================================
+# 模式 B: 全新安装逻辑 (默认执行)
+# ==========================================
 prompt_tty() {
     local prompt="$1"
     local __resultvar="$2"
@@ -41,9 +95,17 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
-# ==========================================
-# 0. 寻找 Python (提前到最前面)
-# ==========================================
+echo ""
+echo "[1/9] Checking dependencies..."
+for cmd in git npm openclaw python3; do
+    if ! command -v $cmd >/dev/null 2>&1; then
+        echo "ERROR: $cmd is required."
+        exit 1
+    fi
+done
+
+echo ""
+echo "[2/9] Finding compatible Python (3.10+)..."
 find_python() {
     for PY in python3 python3.13 python3.12 python3.11 python3.10; do
         if command -v "$PY" >/dev/null 2>&1; then
@@ -61,152 +123,38 @@ if [ -z "$PYTHON_BIN" ]; then
     echo "ERROR: Python 3.10+ not found. Please install it first."
     exit 1
 fi
-
-# ==========================================
-# 1. 独立且防弹的清理模块
-# ==========================================
-cleanup_existing_plugin() {
-    echo "Cleaning up existing plugin records..."
-    
-    # 每一句都加上 || true，绝对禁止报错退出
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
-    rm -rf "$OPENCLAW_EXT_DIR" || true
-    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
-
-    if [ -f "$OPENCLAW_CONFIG" ]; then
-        "$PYTHON_BIN" -c '
-import json, sys, os
-try:
-    with open(sys.argv[1], "r") as f: data = json.load(f)
-    pid = sys.argv[2]
-    modified = False
-    if "plugins" in data:
-        if pid in data.get("plugins", {}).get("entries", {}):
-            del data["plugins"]["entries"][pid]
-            modified = True
-        allow = data.get("plugins", {}).get("allow", [])
-        if pid in allow:
-            data["plugins"]["allow"] = [p for p in allow if p != pid]
-            modified = True
-    if modified:
-        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
-except Exception: pass
-' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
-    fi
-
-    # 强制返回 0，告诉 Bash “清理成功，不准退出脚本”
-    return 0 
-}
-
-# 支持静默卸载模式 (满足你说的“功能分开”)
-if [ "${1:-}" == "--uninstall" ]; then
-    cleanup_existing_plugin
-    rm -rf "$INSTALL_DIR" || true
-    echo "Uninstallation complete!"
-    exit 0
-fi
-
-# ==========================================
-# 2. 交互菜单
-# ==========================================
-IS_SDK_INSTALLED=false
-IS_PLUGIN_REGISTERED=false
-
-if [ -d "$INSTALL_DIR" ]; then IS_SDK_INSTALLED=true; fi
-if [ -d "$OPENCLAW_EXT_DIR" ]; then IS_PLUGIN_REGISTERED=true; fi
-
-if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
-    echo ""
-    echo "Existing ZKE Trading installation detected."
-    echo ""
-    echo "Please select an action:"
-    echo "  1) Update / Reinstall (Keep API config, update code)"
-    echo "  2) Full Reset (Delete all files and configs, start fresh)"
-    echo "  3) Uninstall Plugin Only"
-    echo "  4) Cancel"
-    echo ""
-
-    prompt_tty "Enter choice [1-4]: " MENU_CHOICE
-
-    case "$MENU_CHOICE" in
-        1)
-            echo "Starting update process..."
-            cleanup_existing_plugin || true
-            ;;
-        2)
-            echo "Starting full reset..."
-            cleanup_existing_plugin || true
-            rm -rf "$INSTALL_DIR" || true
-            ;;
-        3)
-            cleanup_existing_plugin || true
-            echo "Uninstallation complete. Exiting."
-            exit 0
-            ;;
-        4|*)
-            echo "Operation cancelled."
-            exit 0
-            ;;
-    esac
-fi
-
-# ==========================================
-# 3. 安装主流程
-# ==========================================
-echo ""
-echo "[1/9] Checking dependencies..."
-for cmd in git npm openclaw; do
-    if ! command -v $cmd >/dev/null 2>&1; then
-        echo "ERROR: $cmd is required."
-        exit 1
-    fi
-done
-
-echo ""
-echo "[2/9] Python version check..."
 echo "✓ Using Python: $PYTHON_BIN"
 
 echo ""
-echo "[3/9] Downloading or updating SDK..."
-if [ -d "$INSTALL_DIR/.git" ]; then
-    cd "$INSTALL_DIR"
-    git fetch --all --tags
-    git reset --hard "origin/$DEFAULT_BRANCH"
-else
-    git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-fi
+echo "[3/9] Downloading SDK..."
+git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
 
 echo ""
 echo "[4/9] Creating Python virtual environment..."
-[ -d ".venv" ] && rm -rf .venv
-"$PYTHON_BIN" -m venv .venv
+"$PYTHON_BIN" -m venv "$INSTALL_DIR/.venv"
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 
 echo ""
 echo "[5/9] Installing Python dependencies..."
 "$VENV_PYTHON" -m pip install --upgrade pip
-"$VENV_PYTHON" -m pip install -r requirements.txt
+"$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements.txt"
 
 echo ""
 echo "[6/9] API Configuration"
-if [ ! -f "$INSTALL_DIR/config.json" ]; then
-    echo ""
-    echo "You can leave API keys blank and configure them later in $INSTALL_DIR/config.json"
-    prompt_tty "Enter Spot API Key (press Enter to skip): " SPOT_API_KEY
-    prompt_tty_secret "Enter Spot API Secret (press Enter to skip): " SPOT_API_SECRET
+echo "You can leave API keys blank and configure them later in $INSTALL_DIR/config.json"
+prompt_tty "Enter Spot API Key (press Enter to skip): " SPOT_API_KEY
+prompt_tty_secret "Enter Spot API Secret (press Enter to skip): " SPOT_API_SECRET
 
-    echo ""
-    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key or skip): " FUTURES_API_KEY
-    if [ -z "$FUTURES_API_KEY" ]; then
-        FUTURES_API_KEY="$SPOT_API_KEY"
-        FUTURES_API_SECRET="$SPOT_API_SECRET"
-    else
-        prompt_tty_secret "Enter Futures API Secret (press Enter to skip): " FUTURES_API_SECRET
-    fi
+echo ""
+prompt_tty "Enter Futures API Key (press Enter to reuse Spot key or skip): " FUTURES_API_KEY
+if [ -z "$FUTURES_API_KEY" ]; then
+    FUTURES_API_KEY="$SPOT_API_KEY"
+    FUTURES_API_SECRET="$SPOT_API_SECRET"
+else
+    prompt_tty_secret "Enter Futures API Secret (press Enter to skip): " FUTURES_API_SECRET
+fi
 
-    "$VENV_PYTHON" -c '
+"$VENV_PYTHON" -c '
 import json, sys
 from pathlib import Path
 args = sys.argv[1:]
@@ -218,10 +166,6 @@ config = {
 with open(Path(args[0]) / "config.json", "w") as f:
     json.dump(config, f, indent=2)
 ' "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET"
-    echo "✓ config.json created"
-else
-    echo "✓ Existing config.json found. Skipping API configuration."
-fi
 
 echo ""
 echo "[7/9] Building OpenClaw plugin..."
@@ -236,6 +180,7 @@ openclaw plugins enable "$PLUGIN_ID"
 
 echo ""
 echo "[9/9] Finalizing..."
+# 确保配置写入 allow 列表
 "$PYTHON_BIN" -c '
 import json, sys, os
 try:
