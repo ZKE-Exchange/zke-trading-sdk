@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# 开启严格模式：报错即止，变量未定义即止
 set -euo pipefail
 
 echo "======================================"
@@ -16,6 +17,7 @@ FUTURES_URL="https://futuresopenapi.zke.com"
 WS_URL="wss://ws.zke.com/kline-api/ws"
 RECV_WINDOW="5000"
 
+# --- 交互工具函数：确保 curl | bash 模式下也能正确读取用户输入 ---
 prompt_tty() {
     local prompt="$1"
     local __resultvar="$2"
@@ -87,8 +89,7 @@ PY
     echo "✓ Using Python: $PYTHON_BIN ($PYTHON_VER)"
 else
     echo "ERROR: Python 3.10+ not found."
-    echo "For macOS with Homebrew:"
-    echo "  brew install python"
+    echo "For macOS with Homebrew: brew install python"
     exit 1
 fi
 
@@ -109,7 +110,6 @@ if [ ! -f "requirements.txt" ]; then
     echo "ERROR: requirements.txt not found."
     exit 1
 fi
-
 echo "✓ Repository ready"
 
 echo ""
@@ -123,7 +123,6 @@ fi
 "$PYTHON_BIN" -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate
-
 echo "✓ Virtual environment created"
 
 echo ""
@@ -131,17 +130,12 @@ echo "[5/9] Installing Python dependencies..."
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-
 echo "✓ Python dependencies installed"
 
 echo ""
 echo "[6/9] API Configuration"
 echo ""
-echo "Create API keys at:"
-echo "https://www.zke.com/en_US/personal/apiManagement"
-echo ""
-echo "You can use separate API keys for Spot and Futures."
-echo "Press Enter on Futures API Key to reuse the Spot credentials."
+echo "Create API keys at: https://www.zke.com/en_US/personal/apiManagement"
 echo ""
 
 SPOT_API_KEY=""
@@ -166,7 +160,7 @@ if [ -z "$FUTURES_API_KEY" ]; then
 else
     prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
     if [ -z "$FUTURES_API_SECRET" ]; then
-        echo "ERROR: Futures API secret cannot be empty when Futures API key is provided."
+        echo "ERROR: Futures API secret cannot be empty."
         exit 1
     fi
 fi
@@ -180,15 +174,8 @@ import sys
 from pathlib import Path
 
 (
-    install_dir,
-    spot_url,
-    futures_url,
-    ws_url,
-    recv_window,
-    spot_api_key,
-    spot_api_secret,
-    futures_api_key,
-    futures_api_secret,
+    install_dir, spot_url, futures_url, ws_url, recv_window,
+    spot_api_key, spot_api_secret, futures_api_key, futures_api_secret,
 ) = sys.argv[1:]
 
 config = {
@@ -220,30 +207,10 @@ echo ""
 echo "[7/9] Building OpenClaw plugin..."
 
 PLUGIN_SRC="$INSTALL_DIR/openclaw-plugin"
-
-if [ ! -d "$PLUGIN_SRC" ]; then
-    echo "ERROR: Plugin source directory not found: $PLUGIN_SRC"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/package.json" ]; then
-    echo "ERROR: package.json not found: $PLUGIN_SRC/package.json"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/openclaw.plugin.json" ]; then
-    echo "ERROR: openclaw.plugin.json not found: $PLUGIN_SRC/openclaw.plugin.json"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/skills/zke_trading/SKILL.md" ]; then
-    echo "ERROR: skills/zke_trading/SKILL.md not found"
-    exit 1
-fi
+if [ ! -d "$PLUGIN_SRC" ]; then echo "ERROR: Plugin source directory not found"; exit 1; fi
 
 cd "$PLUGIN_SRC"
 rm -rf dist node_modules
-
 npm install
 npm run build
 
@@ -251,25 +218,24 @@ if [ ! -f "$PLUGIN_SRC/dist/index.js" ]; then
     echo "ERROR: Plugin build failed, dist/index.js not found"
     exit 1
 fi
-
 echo "✓ Plugin build complete"
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
 
+# 尝试卸载旧版
 openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
 sleep 1
 
 openclaw plugins install "$PLUGIN_SRC"
 openclaw plugins enable "$PLUGIN_ID"
-
 echo "✓ Plugin installed and enabled"
 
 echo ""
 echo "[9/9] Final verification..."
 
-OPENCLAW_CONFIG="/Users/openclaw/.openclaw/openclaw.json"
-mkdir -p "/Users/openclaw/.openclaw"
+OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
+mkdir -p "$HOME/.openclaw"
 
 "$PYTHON_BIN" - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
 import json
@@ -287,15 +253,13 @@ if cfg_path.exists():
 else:
     data = {}
 
-plugins = data.get("plugins")
-if not isinstance(plugins, dict):
-    plugins = {}
-    data["plugins"] = plugins
+plugins = data.get("plugins", {})
+if not isinstance(plugins, dict): plugins = {}
+data["plugins"] = plugins
 
-allow = plugins.get("allow")
-if not isinstance(allow, list):
-    allow = []
-    plugins["allow"] = allow
+allow = plugins.get("allow", [])
+if not isinstance(allow, list): allow = []
+plugins["allow"] = allow
 
 if plugin_id not in allow:
     allow.append(plugin_id)
@@ -321,4 +285,20 @@ echo "✓ Python validation passed"
 echo ""
 echo "======================================"
 echo "ZKE OpenClaw Plugin installed"
+echo "======================================"
+echo ""
+echo "SDK location: $INSTALL_DIR"
+echo "Plugin source: $PLUGIN_SRC"
+echo ""
+echo "Next steps:"
+echo "  1. Completely restart OpenClaw"
+echo "  2. Open a NEW chat/session"
+echo "  3. Test prompts:"
+echo "      - Check BTC price on ZKE"
+echo "      - Show my USDT balance on ZKE"
+echo "      - Place a BTC limit order on ZKE"
+echo ""
+echo "Diagnostics:"
+echo "  openclaw plugins list"
+echo "  openclaw plugins info $PLUGIN_ID"
 echo "======================================"
