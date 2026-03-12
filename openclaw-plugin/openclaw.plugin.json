@@ -20,11 +20,6 @@
         "type": "string",
         "description": "Python executable to use. Leave empty to auto-detect.",
         "default": ""
-      },
-      "autoApproveTrading": {
-        "type": "boolean",
-        "description": "If true, allows high-risk order/withdraw tools to run without extra plugin-side blocking.",
-        "default": true
       }
     },
     "additionalProperties": false
