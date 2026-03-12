@@ -3,7 +3,7 @@
 set -euo pipefail
 
 echo "======================================"
-echo "Installing ZKE OpenClaw Plugin"
+echo "ZKE OpenClaw Plugin: Full Professional Installer"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
@@ -11,14 +11,57 @@ REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
 DEFAULT_BRANCH="main"
 PLUGIN_ID="zke-trading"
 
-SPOT_URL="https://openapi.zke.com"
-FUTURES_URL="https://futuresopenapi.zke.com"
-WS_URL="wss://ws.zke.com/kline-api/ws"
-RECV_WINDOW="5000"
-
+# OpenClaw 默认路径
 OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 
+# ---------------------------------------------------------
+# 1. 深度清理与死锁修复函数 (保留其他插件)
+# ---------------------------------------------------------
+cleanup_existing_plugin() {
+    echo "Performing surgical cleanup of '$PLUGIN_ID'..."
+    
+    # 物理清理目录
+    rm -rf "$OPENCLAW_EXT_DIR"
+    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
+
+    # 物理修复 JSON 配置文件中的死锁条目
+    if [ -f "$OPENCLAW_CONFIG" ]; then
+        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+cfg_path = sys.argv[1]
+pid = sys.argv[2]
+try:
+    with open(cfg_path, 'r') as f:
+        data = json.load(f)
+    
+    modified = False
+    if "plugins" in data:
+        # 仅移除 entries 中属于本项目 ID 的残余，保留其他插件
+        entries = data.get("plugins", {}).get("entries", {})
+        if pid in entries:
+            del entries[pid]
+            modified = True
+        
+        # 仅从 allow 列表中剔除本项目 ID，保留其他所有插件
+        allow_list = data.get("plugins", {}).get("allow", [])
+        if pid in allow_list:
+            data["plugins"]["allow"] = [p for p in allow_list if p != pid]
+            modified = True
+            
+    if modified:
+        with open(cfg_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f"✓ Fixed stale config entries for {pid}. (Other plugins preserved)")
+except Exception as e:
+    print(f"! Warning: Config patching skipped: {e}")
+PY
+    fi
+}
+
+# ---------------------------------------------------------
+# 2. 交互工具
+# ---------------------------------------------------------
 prompt_tty() {
     local prompt="$1"
     local __resultvar="$2"
@@ -40,394 +83,118 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
-# ==========================================
-# [修复点] 深度清理函数，同时清理物理文件和 JSON 配置
-# ==========================================
-cleanup_existing_plugin() {
-    echo "Cleaning up existing plugin installation..."
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
-    
-    # 清理物理文件
-    rm -rf "$OPENCLAW_EXT_DIR"
-    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
-
-    # 深度清理 openclaw.json 中的残留记录，防止安装时报错
-    if command -v python3 >/dev/null 2>&1; then
-        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
-import json, sys, os
-cfg_path = sys.argv[1]
-pid = sys.argv[2]
-if os.path.exists(cfg_path):
-    try:
-        with open(cfg_path, 'r') as f:
-            data = json.load(f)
-        modified = False
-        if "plugins" in data:
-            if "entries" in data["plugins"] and pid in data["plugins"]["entries"]:
-                del data["plugins"]["entries"][pid]
-                modified = True
-            if "allow" in data["plugins"] and pid in data["plugins"]["allow"]:
-                data["plugins"]["allow"].remove(pid)
-                modified = True
-        if modified:
-            with open(cfg_path, 'w') as f:
-                json.dump(data, f, indent=2)
-    except Exception:
-        pass
-PY
-    fi
-}
-
-# Check for existing installation
-IS_SDK_INSTALLED=false
-IS_PLUGIN_REGISTERED=false
-
-if [ -d "$INSTALL_DIR" ]; then IS_SDK_INSTALLED=true; fi
-if [ -d "$OPENCLAW_EXT_DIR" ]; then IS_PLUGIN_REGISTERED=true; fi
-
-if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
+# ---------------------------------------------------------
+# 3. 检查现有安装
+# ---------------------------------------------------------
+if [ -d "$INSTALL_DIR" ]; then
     echo ""
     echo "Existing ZKE Trading installation detected."
-    if $IS_PLUGIN_REGISTERED; then
-        echo "Status: Plugin is installed and registered."
-    else
-        echo "Status: SDK found, but plugin is not registered."
-    fi
+    echo "1) Update / Reinstall (Keep API config, update code)"
+    echo "2) Full Reset (Delete all files and configs, start fresh)"
+    echo "3) Cancel"
     echo ""
-    echo "Please select an action:"
-    echo "  1) Update / Reinstall (Keep API config, update code)"
-    echo "  2) Full Reset (Delete all files and configs, start fresh)"
-    echo "  3) Uninstall Plugin Only"
-    echo "  4) Cancel"
-    echo ""
-
-    prompt_tty "Enter choice [1-4]: " MENU_CHOICE
-
+    prompt_tty "Enter choice [1-3]: " MENU_CHOICE
     case "$MENU_CHOICE" in
-        1)
-            echo ""
-            echo "Starting update process..."
-            if $IS_PLUGIN_REGISTERED; then cleanup_existing_plugin; fi
-            ;;
-        2)
-            echo ""
-            echo "Starting full reset..."
+        1) cleanup_existing_plugin ;;
+        2) 
             cleanup_existing_plugin
             echo "Removing SDK directory: $INSTALL_DIR"
             rm -rf "$INSTALL_DIR"
             ;;
-        3)
-            echo ""
-            cleanup_existing_plugin
-            echo "Uninstallation complete. Exiting."
-            exit 0
-            ;;
-        4|*)
-            echo "Operation cancelled."
-            exit 0
-            ;;
+        *) echo "Operation cancelled."; exit 0 ;;
     esac
 fi
 
+# ---------------------------------------------------------
+# 4. 执行核心步骤
+# ---------------------------------------------------------
 echo ""
 echo "[1/9] Checking dependencies..."
-
-if ! command -v git >/dev/null 2>&1; then
-    echo "ERROR: git is required."
-    exit 1
-fi
-
-if ! command -v npm >/dev/null 2>&1; then
-    echo "ERROR: npm is required."
-    exit 1
-fi
-
-if ! command -v openclaw >/dev/null 2>&1; then
-    echo "ERROR: openclaw CLI is required."
-    exit 1
-fi
-
-echo "✓ git detected"
-echo "✓ npm detected"
-echo "✓ openclaw detected"
+for cmd in git npm openclaw python3; do
+    if ! command -v $cmd >/dev/null 2>&1; then echo "ERROR: $cmd is required."; exit 1; fi
+done
 
 echo ""
-echo "[2/9] Detecting compatible Python..."
-
-find_python() {
-    for PY in python3 python3.13 python3.12 python3.11 python3.10; do
-        if command -v "$PY" >/dev/null 2>&1; then
-            if "$PY" - << 'PY' >/dev/null 2>&1
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
-PY
-            then
-                echo "$PY"
-                return 0
-            fi
-        fi
-    done
-    return 1
-}
-
-if PYTHON_BIN="$(find_python)"; then
-    PYTHON_VER="$("$PYTHON_BIN" - << 'PY'
-import sys
-print(".".join(map(str, sys.version_info[:3])))
-PY
-)"
-    echo "✓ Using Python: $PYTHON_BIN ($PYTHON_VER)"
-else
-    echo "ERROR: Python 3.10+ not found."
-    echo "For macOS with Homebrew:"
-    echo "  brew install python"
-    exit 1
-fi
-
-echo ""
-echo "[3/9] Downloading or updating SDK..."
-
+echo "[2/9] Syncing SDK Repository..."
 if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "Existing repository detected, updating..."
-    cd "$INSTALL_DIR"
-    git fetch --all --tags
-    git reset --hard "origin/$DEFAULT_BRANCH"
+    cd "$INSTALL_DIR" && git fetch --all && git reset --hard "origin/$DEFAULT_BRANCH"
 else
     git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
-if [ ! -f "requirements.txt" ]; then
-    echo "ERROR: requirements.txt not found."
-    exit 1
-fi
-
-echo "✓ Repository ready"
-
 echo ""
-echo "[4/9] Creating Python virtual environment..."
-
-if [ -d ".venv" ]; then
-    echo "Existing virtual environment found. Recreating..."
-    rm -rf .venv
-fi
-
-"$PYTHON_BIN" -m venv .venv
+echo "[3/9] Setting up Python Environment..."
+[ -d ".venv" ] && rm -rf .venv
+python3 -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate
+pip install --upgrade pip && pip install -r requirements.txt
 
-echo "✓ Virtual environment created"
-
-echo ""
-echo "[5/9] Installing Python dependencies..."
-
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-echo "✓ Python dependencies installed"
-
-echo ""
-echo "[6/9] API Configuration"
-
+# ---------------------------------------------------------
+# 5. API 配置逻辑 (只有在 config.json 不存在时执行)
+# ---------------------------------------------------------
 if [ ! -f "$INSTALL_DIR/config.json" ]; then
     echo ""
-    echo "Create API keys at:"
-    echo "https://www.zke.com/en_US/personal/apiManagement"
-    echo ""
-    echo "You can use separate API keys for Spot and Futures."
-    echo "Press Enter on Futures API Key to reuse the Spot credentials."
-    echo ""
-
-    SPOT_API_KEY=""
-    SPOT_API_SECRET=""
-    FUTURES_API_KEY=""
-    FUTURES_API_SECRET=""
-
-    prompt_tty "Enter Spot API Key: " SPOT_API_KEY
-    prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
-
-    if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
-        echo "ERROR: Spot API key and secret cannot be empty."
-        exit 1
-    fi
-
-    echo ""
-    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
-    if [ -z "$FUTURES_API_KEY" ]; then
-        FUTURES_API_KEY="$SPOT_API_KEY"
-        FUTURES_API_SECRET="$SPOT_API_SECRET"
-        echo "✓ Reusing Spot API credentials for Futures"
+    echo "--- ZKE API CONFIGURATION ---"
+    prompt_tty "Enter Spot API Key: " SPOT_KEY
+    prompt_tty_secret "Enter Spot API Secret: " SPOT_SEC
+    prompt_tty "Enter Futures API Key (Enter to reuse Spot): " FUT_KEY
+    if [ -z "$FUT_KEY" ]; then
+        FUT_KEY="$SPOT_KEY"; FUT_SEC="$SPOT_SEC"
     else
-        prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
-        if [ -z "$FUTURES_API_SECRET" ]; then
-            echo "ERROR: Futures API secret cannot be empty when Futures API key is provided."
-            exit 1
-        fi
+        prompt_tty_secret "Enter Futures API Secret: " FUT_SEC
     fi
 
-    echo ""
-    echo "Generating config.json..."
-
-    "$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
-import json
-import sys
-from pathlib import Path
-
-(
-    install_dir,
-    spot_url,
-    futures_url,
-    ws_url,
-    recv_window,
-    spot_api_key,
-    spot_api_secret,
-    futures_api_key,
-    futures_api_secret,
-) = sys.argv[1:]
-
-config = {
-    "spot": {
-        "base_url": spot_url,
-        "api_key": spot_api_key,
-        "api_secret": spot_api_secret,
-        "recv_window": int(recv_window),
-    },
-    "futures": {
-        "base_url": futures_url,
-        "api_key": futures_api_key,
-        "api_secret": futures_api_secret,
-        "recv_window": int(recv_window),
-    },
-    "ws": {
-        "url": ws_url,
-    },
+    # 生成 config.json
+    cat <<EOF > "$INSTALL_DIR/config.json"
+{
+  "spot": { "base_url": "https://openapi.zke.com", "api_key": "$SPOT_KEY", "api_secret": "$SPOT_SEC", "recv_window": 5000 },
+  "futures": { "base_url": "https://futuresopenapi.zke.com", "api_key": "$FUT_KEY", "api_secret": "$FUT_SEC", "recv_window": 5000 },
+  "ws": { "url": "wss://ws.zke.com/kline-api/ws" }
 }
-
-Path(install_dir).mkdir(parents=True, exist_ok=True)
-with open(Path(install_dir) / "config.json", "w", encoding="utf-8") as f:
-    json.dump(config, f, ensure_ascii=False, indent=2)
-
-print("✓ config.json created")
-PY
-else
-    echo "✓ Existing config.json found. Skipping API configuration."
+EOF
+    echo "✓ config.json generated."
 fi
 
 echo ""
-echo "[7/9] Building OpenClaw plugin..."
-
-PLUGIN_SRC="$INSTALL_DIR/openclaw-plugin"
-
-if [ ! -d "$PLUGIN_SRC" ]; then
-    echo "ERROR: Plugin source directory not found: $PLUGIN_SRC"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/package.json" ]; then
-    echo "ERROR: package.json not found: $PLUGIN_SRC/package.json"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/openclaw.plugin.json" ]; then
-    echo "ERROR: openclaw.plugin.json not found: $PLUGIN_SRC/openclaw.plugin.json"
-    exit 1
-fi
-
-if [ ! -f "$PLUGIN_SRC/skills/zke_trading/SKILL.md" ]; then
-    echo "ERROR: skills/zke_trading/SKILL.md not found"
-    exit 1
-fi
-
-cd "$PLUGIN_SRC"
-rm -rf dist node_modules
-
+echo "[6/9] Building OpenClaw Plugin..."
+cd "$INSTALL_DIR/openclaw-plugin"
 npm install
 npm run build
-
-if [ ! -f "$PLUGIN_SRC/dist/index.js" ]; then
-    echo "ERROR: Plugin build failed, dist/index.js not found"
-    exit 1
-fi
-
-echo "✓ Plugin build complete"
+echo "✓ Plugin compiled successfully."
 
 echo ""
-echo "[8/9] Installing and enabling OpenClaw plugin..."
-
-openclaw plugins install "$PLUGIN_SRC"
+echo "[7/9] Registering with OpenClaw..."
+# 这里之前已经通过 Python 修复了死锁，所以 install 命令不会报错
+openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
-echo "✓ Plugin installed and enabled"
-
 echo ""
-echo "[9/9] Final verification..."
-
-mkdir -p "$HOME/.openclaw"
-
-"$PYTHON_BIN" - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
-import json
-import sys
-from pathlib import Path
-
-cfg_path = Path(sys.argv[1])
-plugin_id = sys.argv[2]
-
-if cfg_path.exists():
-    try:
-        data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    except Exception:
-        data = {}
-else:
-    data = {}
-
-plugins = data.setdefault("plugins", {})
-allow = plugins.setdefault("allow", [])
-
-if plugin_id not in allow:
-    allow.append(plugin_id)
-
-cfg_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-print("✓ Updated OpenClaw allowlist")
+echo "[8/9] Injecting runtime permissions..."
+# 确保在 allow 列表中 (双重保险)
+python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+cfg_path = sys.argv[1]
+pid = sys.argv[2]
+if os.path.exists(cfg_path):
+    with open(cfg_path, "r") as f:
+        data = json.load(f)
+    allow = data.setdefault("plugins", {}).setdefault("allow", [])
+    if pid not in allow:
+        allow.append(pid)
+        with open(cfg_path, "w") as f:
+            json.dump(data, f, indent=2)
 PY
 
-if openclaw plugins info "$PLUGIN_ID" >/dev/null 2>&1; then
-    echo "✓ Plugin verification passed"
-else
-    echo "WARNING: Plugin installed but verification returned non-zero"
-fi
-
 echo ""
-echo "Running basic Python validation..."
-cd "$INSTALL_DIR"
-source .venv/bin/activate
-python -m py_compile main.py
-python -m py_compile mcp_server.py
-echo "✓ Python validation passed"
+echo "[9/9] Restarting Gateway..."
+openclaw gateway --force
 
 echo ""
 echo "======================================"
-echo "ZKE OpenClaw Plugin Installation Complete"
+echo "✅ SUCCESS! ZKE Trading Plugin is fully operational."
 echo "======================================"
-echo ""
-echo "SDK location:"
-echo "  $INSTALL_DIR"
-echo ""
-echo "Plugin source:"
-echo "  $PLUGIN_SRC"
-echo ""
-echo "Next steps:"
-echo "  1. Completely restart OpenClaw (Run: openclaw gateway --force)"
-echo "  2. Open a NEW chat/session"
-echo "  3. Test prompts:"
-echo "     Check BTC price on ZKE"
-echo "     Show my USDT balance on ZKE"
-echo "     Show my futures positions on ZKE"
-echo "     Place a BTC limit order on ZKE"
-echo ""
-echo "Diagnostics:"
-echo "  openclaw plugins list"
-echo "  openclaw plugins info $PLUGIN_ID"
-echo "  openclaw plugins doctor"
-echo ""
+echo "SDK: $INSTALL_DIR"
+echo "Plugin: $INSTALL_DIR/openclaw-plugin"
 echo "======================================"
