@@ -6,7 +6,6 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_create_margin_order",
       description: "Create a ZKE margin order",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
@@ -55,7 +54,6 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
     {
       name: "zke_cancel_margin_order",
       description: "Cancel a ZKE margin order by order id",
-      dangerous: true,
       inputSchema: {
         type: "object",
         properties: {
