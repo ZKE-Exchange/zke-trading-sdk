@@ -1,7 +1,5 @@
 #!/bin/bash
-
-# 开启严格报错模式
-set -eu
+set -e
 
 echo "======================================"
 echo "ZKE OpenClaw Plugin Installer"
@@ -18,72 +16,8 @@ WS_URL="wss://ws.zke.com/kline-api/ws"
 RECV_WINDOW="5000"
 
 OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
-OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
+OPENCLAW_CONFIG="/Users/openclaw/.openclaw/openclaw.json"
 
-# ==========================================
-# 杀手锏：使用 Node.js 强行清洗配置 (100% 成功率)
-# ==========================================
-scrub_json_config() {
-    if command -v node >/dev/null 2>&1 && [ -f "$OPENCLAW_CONFIG" ]; then
-        node -e "
-        const fs = require('fs');
-        try {
-            const p = '$OPENCLAW_CONFIG';
-            const pid = '$PLUGIN_ID';
-            let data = JSON.parse(fs.readFileSync(p, 'utf8'));
-            let modified = false;
-            if (data.plugins) {
-                if (data.plugins.entries && data.plugins.entries[pid]) {
-                    delete data.plugins.entries[pid];
-                    modified = true;
-                }
-                if (data.plugins.allow && data.plugins.allow.includes(pid)) {
-                    data.plugins.allow = data.plugins.allow.filter(x => x !== pid);
-                    modified = true;
-                }
-            }
-            if (modified) {
-                fs.writeFileSync(p, JSON.stringify(data, null, 2));
-                console.log('✓ Auto-fixed dirty OpenClaw config file');
-            }
-        } catch (e) {}
-        " || true
-    fi
-}
-
-# ==========================================
-# 模式 A: 纯净卸载
-# ==========================================
-if [ "${1:-}" == "--uninstall" ]; then
-    echo "Starting uninstallation..."
-    
-    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
-    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
-    rm -rf "$OPENCLAW_EXT_DIR" || true
-    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
-    rm -rf "$INSTALL_DIR" || true
-
-    scrub_json_config
-
-    echo "✅ Uninstallation complete! You can now run a fresh install."
-    exit 0
-fi
-
-# ==========================================
-# 防呆拦截
-# ==========================================
-if [ -d "$INSTALL_DIR" ] || [ -d "$OPENCLAW_EXT_DIR" ]; then
-    echo "⚠️  Existing installation detected."
-    echo "To avoid conflicts, please uninstall the existing version first by running:"
-    echo ""
-    echo "curl -s \"https://raw.githubusercontent.com/ZKE-Exchange/zke-trading-sdk/main/install_openclaw_plugin.sh?v=\$RANDOM\" | bash -s -- --uninstall"
-    echo ""
-    exit 1
-fi
-
-# ==========================================
-# 模式 B: 全新安装
-# ==========================================
 prompt_tty() {
     local prompt="$1"
     local __resultvar="$2"
@@ -105,9 +39,73 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
+# ==========================================
+# 核心清理模块 (解决插件残留报错)
+# ==========================================
+do_uninstall() {
+    echo "Cleaning up files and configurations..."
+    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
+    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    
+    rm -rf "$OPENCLAW_EXT_DIR" || true
+    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID" || true
+    rm -rf "$INSTALL_DIR" || true
+
+    if [ -f "$OPENCLAW_CONFIG" ]; then
+        python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], "r") as f: data = json.load(f)
+    pid = sys.argv[2]
+    modified = False
+    if "plugins" in data:
+        if pid in data.get("plugins", {}).get("entries", {}):
+            del data["plugins"]["entries"][pid]
+            modified = True
+        allow = data.get("plugins", {}).get("allow", [])
+        if pid in allow:
+            data["plugins"]["allow"] = [p for p in allow if p != pid]
+            modified = True
+    if modified:
+        with open(sys.argv[1], "w") as f: json.dump(data, f, indent=2)
+except Exception: pass
+' "$OPENCLAW_CONFIG" "$PLUGIN_ID" || true
+    fi
+    echo "✓ Cleanup complete."
+}
+
+# ==========================================
+# 开局二选一菜单
+# ==========================================
+echo "Please select an action:"
+echo "  1) Fresh Install (全新安装)"
+echo "  2) Uninstall (彻底卸载)"
+echo "  3) Cancel (取消)"
+echo ""
+
+prompt_tty "Enter choice [1-3]: " MENU_CHOICE
+
+if [ "$MENU_CHOICE" == "2" ]; then
+    do_uninstall
+    echo "✅ Uninstallation successful. Exiting."
+    exit 0
+elif [ "$MENU_CHOICE" == "3" ]; then
+    echo "Operation cancelled."
+    exit 0
+elif [ "$MENU_CHOICE" != "1" ]; then
+    echo "Invalid choice. Exiting."
+    exit 1
+fi
+
+# ==========================================
+# 选 1: 全新安装流程 (先强行清理，再走 1-9 步)
+# ==========================================
+do_uninstall
+echo "Starting fresh installation..."
+
 echo ""
 echo "[1/9] Checking dependencies..."
-for cmd in git npm openclaw python3 node; do
+for cmd in git npm openclaw python3; do
     if ! command -v $cmd >/dev/null 2>&1; then
         echo "ERROR: $cmd is required."
         exit 1
@@ -185,29 +183,11 @@ npm run build
 
 echo ""
 echo "[8/9] Installing and enabling OpenClaw plugin..."
-# 👉 战前推土机：在安装的前一秒，强行铲除配置死锁
-scrub_json_config
-
 openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
 echo ""
 echo "[9/9] Finalizing..."
-# 双重保险：安装后用 Node 强制写入白名单
-node -e "
-const fs = require('fs');
-try {
-    const p = '$OPENCLAW_CONFIG';
-    let data = JSON.parse(fs.readFileSync(p, 'utf8'));
-    if (!data.plugins) data.plugins = {};
-    if (!data.plugins.allow) data.plugins.allow = [];
-    if (!data.plugins.allow.includes('$PLUGIN_ID')) {
-        data.plugins.allow.push('$PLUGIN_ID');
-        fs.writeFileSync(p, JSON.stringify(data, null, 2));
-    }
-} catch (e) {}
-" || true
-
 openclaw gateway --force
 
 echo ""
