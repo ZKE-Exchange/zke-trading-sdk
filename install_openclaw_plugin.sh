@@ -3,71 +3,21 @@
 set -euo pipefail
 
 echo "======================================"
-echo "ZKE OpenClaw Plugin: Ultimate Robust Edition"
+echo "Installing ZKE OpenClaw Plugin"
 echo "======================================"
 
 INSTALL_DIR="$HOME/.zke-trading"
 REPO_URL="https://github.com/ZKE-Exchange/zke-trading-sdk.git"
 DEFAULT_BRANCH="main"
 PLUGIN_ID="zke-trading"
+
+SPOT_URL="https://openapi.zke.com"
+FUTURES_URL="https://futuresopenapi.zke.com"
+WS_URL="wss://ws.zke.com/kline-api/ws"
+RECV_WINDOW="5000"
+
 OPENCLAW_EXT_DIR="$HOME/.openclaw/extensions/$PLUGIN_ID"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
-
-# ---------------------------------------------------------
-# [你的核心逻辑] 自动探测 3.10+ 的高版本 Python
-# ---------------------------------------------------------
-find_python() {
-    for PY in python3 python3.13 python3.12 python3.11 python3.10; do
-        if command -v "$PY" >/dev/null 2>&1; then
-            if "$PY" - << 'PY' >/dev/null 2>&1
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
-PY
-            then
-                echo "$PY"
-                return 0
-            fi
-        fi
-    done
-    return 1
-}
-
-# ---------------------------------------------------------
-# [我的核心逻辑] 手术级清理，保留其他插件，打破死锁
-# ---------------------------------------------------------
-cleanup_existing_plugin() {
-    echo "Cleaning up existing plugin records (Physically & Logically)..."
-    rm -rf "$OPENCLAW_EXT_DIR"
-    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
-
-    if [ -f "$OPENCLAW_CONFIG" ]; then
-        # 即使 CLI 挂了，我们也用 Python 直接修文件
-        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
-import json, sys, os
-cfg_path = sys.argv[1]
-pid = sys.argv[2]
-try:
-    with open(cfg_path, 'r') as f:
-        data = json.load(f)
-    modified = False
-    if "plugins" in data:
-        entries = data.get("plugins", {}).get("entries", {})
-        if pid in entries:
-            del entries[pid]
-            modified = True
-        allow_list = data.get("plugins", {}).get("allow", [])
-        if pid in allow_list:
-            data["plugins"]["allow"] = [p for p in allow_list if p != pid]
-            modified = True
-    if modified:
-        with open(cfg_path, 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"✓ Config scrubbed for {pid}.")
-except Exception as e:
-    print(f"! Warning: Patched failed: {e}")
-PY
-    fi
-}
 
 prompt_tty() {
     local prompt="$1"
@@ -90,82 +40,258 @@ prompt_tty_secret() {
     printf -v "$__resultvar" '%s' "$value"
 }
 
-# ---------------------------------------------------------
-# 流程开始
-# ---------------------------------------------------------
+# ==========================================
+# 仅在此处做了增强：加入了物理修复 JSON 的逻辑，防止死锁
+# ==========================================
+cleanup_existing_plugin() {
+    echo "Cleaning up existing plugin installation..."
+    
+    # 尝试通过 CLI 卸载（即使失败也没关系）
+    openclaw plugins disable "$PLUGIN_ID" >/dev/null 2>&1 || true
+    openclaw plugins uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    
+    # 物理删除文件
+    rm -rf "$OPENCLAW_EXT_DIR"
+    rm -f "$HOME/.openclaw/plugins/$PLUGIN_ID"
 
-# 1. 检测 Python 版本 (使用你的探测逻辑)
-if ! PYTHON_BIN="$(find_python)"; then
-    echo "ERROR: Python 3.10+ is required but not found."
-    exit 1
-fi
-echo "✓ Found compatible Python: $PYTHON_BIN"
+    # [核心修复] 直接操作 JSON，解决 "plugin not found" 导致的 CLI 死锁
+    if [ -f "$OPENCLAW_CONFIG" ]; then
+        python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+cfg_path = sys.argv[1]
+pid = sys.argv[2]
+try:
+    with open(cfg_path, 'r') as f:
+        data = json.load(f)
+    modified = False
+    if "plugins" in data:
+        # 移除 entries 记录
+        entries = data.get("plugins", {}).get("entries", {})
+        if pid in entries:
+            del entries[pid]
+            modified = True
+        # 从 allow 列表剔除，防止校验报错
+        allow = data.get("plugins", {}).get("allow", [])
+        if pid in allow:
+            data["plugins"]["allow"] = [p for p in allow if p != pid]
+            modified = True
+    if modified:
+        with open(cfg_path, 'w') as f:
+            json.dump(data, f, indent=2)
+except Exception:
+    pass
+PY
+    fi
+}
 
-# 2. 检查现有安装
-if [ -d "$INSTALL_DIR" ]; then
+# Check for existing installation
+IS_SDK_INSTALLED=false
+IS_PLUGIN_REGISTERED=false
+
+if [ -d "$INSTALL_DIR" ]; then IS_SDK_INSTALLED=true; fi
+if [ -d "$OPENCLAW_EXT_DIR" ]; then IS_PLUGIN_REGISTERED=true; fi
+
+if $IS_SDK_INSTALLED || $IS_PLUGIN_REGISTERED; then
     echo ""
     echo "Existing ZKE Trading installation detected."
-    echo "1) Update / Reinstall (Keep API config)"
-    echo "2) Full Reset"
-    echo "3) Cancel"
-    prompt_tty "Choice: " MENU_CHOICE
+    echo ""
+    echo "Please select an action:"
+    echo "  1) Update / Reinstall (Keep API config, update code)"
+    echo "  2) Full Reset (Delete all files and configs, start fresh)"
+    echo "  3) Uninstall Plugin Only"
+    echo "  4) Cancel"
+    echo ""
+
+    prompt_tty "Enter choice [1-4]: " MENU_CHOICE
+
     case "$MENU_CHOICE" in
-        1) cleanup_existing_plugin ;;
-        2) cleanup_existing_plugin; rm -rf "$INSTALL_DIR" ;;
-        *) exit 0 ;;
+        1)
+            echo ""
+            echo "Starting update process..."
+            cleanup_existing_plugin
+            ;;
+        2)
+            echo ""
+            echo "Starting full reset..."
+            cleanup_existing_plugin
+            echo "Removing SDK directory: $INSTALL_DIR"
+            rm -rf "$INSTALL_DIR"
+            ;;
+        3)
+            echo ""
+            cleanup_existing_plugin
+            echo "Uninstallation complete. Exiting."
+            exit 0
+            ;;
+        4|*)
+            echo "Operation cancelled."
+            exit 0
+            ;;
     esac
 fi
 
-# 3. 同步代码
 echo ""
-echo "[3/9] Syncing SDK..."
-if [ -d "$INSTALL_DIR/.git" ]; then
-    cd "$INSTALL_DIR" && git fetch --all && git reset --hard origin/main
+echo "[1/9] Checking dependencies..."
+
+if ! command -v git >/dev/null 2>&1; then
+    echo "ERROR: git is required."
+    exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    echo "ERROR: npm is required."
+    exit 1
+fi
+
+if ! command -v openclaw >/dev/null 2>&1; then
+    echo "ERROR: openclaw CLI is required."
+    exit 1
+fi
+
+echo "✓ git detected"
+echo "✓ npm detected"
+echo "✓ openclaw detected"
+
+echo ""
+echo "[2/9] Detecting compatible Python..."
+
+find_python() {
+    for PY in python3 python3.13 python3.12 python3.11 python3.10; do
+        if command -v "$PY" >/dev/null 2>&1; then
+            if "$PY" - << 'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
+PY
+            then
+                echo "$PY"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+if PYTHON_BIN="$(find_python)"; then
+    PYTHON_VER="$("$PYTHON_BIN" - << 'PY'
+import sys
+print(".".join(map(str, sys.version_info[:3])))
+PY
+)"
+    echo "✓ Using Python: $PYTHON_BIN ($PYTHON_VER)"
 else
-    git clone https://github.com/ZKE-Exchange/zke-trading-sdk.git "$INSTALL_DIR"
+    echo "ERROR: Python 3.10+ not found."
+    exit 1
+fi
+
+echo ""
+echo "[3/9] Downloading or updating SDK..."
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+    echo "Existing repository detected, updating..."
+    cd "$INSTALL_DIR"
+    git fetch --all --tags
+    git reset --hard "origin/$DEFAULT_BRANCH"
+else
+    git clone -b "$DEFAULT_BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
-# 4. 环境搭建 (强制使用探测到的高版本 Python)
-echo ""
-echo "[4/9] Setting up Virtual Env..."
-[ -d ".venv" ] && rm -rf .venv
-"$PYTHON_BIN" -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-echo "✓ Dependencies installed with $(python --version)"
+echo "✓ Repository ready"
 
-# 5. API 配置
-if [ ! -f "config.json" ]; then
-    prompt_tty "Spot API Key: " S_KEY
-    prompt_tty_secret "Spot Secret: " S_SEC
-    prompt_tty "Futures API Key (Enter to reuse): " F_KEY
-    [ -z "$F_KEY" ] && F_KEY="$S_KEY" && F_SEC="$S_SEC" || prompt_tty_secret "Futures Secret: " F_SEC
-    
-    cat <<EOF > config.json
-{
-  "spot": { "base_url": "https://openapi.zke.com", "api_key": "$S_KEY", "api_secret": "$S_SEC", "recv_window": 5000 },
-  "futures": { "base_url": "https://futuresopenapi.zke.com", "api_key": "$F_KEY", "api_secret": "$F_SEC", "recv_window": 5000 },
-  "ws": { "url": "wss://ws.zke.com/kline-api/ws" }
-}
-EOF
+echo ""
+echo "[4/9] Creating Python virtual environment..."
+
+if [ -d ".venv" ]; then
+    echo "Existing virtual environment found. Recreating..."
+    rm -rf .venv
 fi
 
-# 6. 编译安装
-echo ""
-echo "[6/9] Building Plugin..."
-cd "$INSTALL_DIR/openclaw-plugin"
-npm install && npm run build
+"$PYTHON_BIN" -m venv .venv
+source .venv/bin/activate
+
+echo "✓ Virtual environment created"
 
 echo ""
-echo "[8/9] Installing..."
-# 这里 JSON 已经提前修好了，install 不会报错
+echo "[5/9] Installing Python dependencies..."
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+echo "✓ Python dependencies installed"
+
+echo ""
+echo "[6/9] API Configuration"
+
+if [ ! -f "$INSTALL_DIR/config.json" ]; then
+    echo ""
+    prompt_tty "Enter Spot API Key: " SPOT_API_KEY
+    prompt_tty_secret "Enter Spot API Secret: " SPOT_API_SECRET
+
+    if [ -z "$SPOT_API_KEY" ] || [ -z "$SPOT_API_SECRET" ]; then
+        echo "ERROR: API credentials cannot be empty."
+        exit 1
+    fi
+
+    echo ""
+    prompt_tty "Enter Futures API Key (press Enter to reuse Spot key): " FUTURES_API_KEY
+    if [ -z "$FUTURES_API_KEY" ]; then
+        FUTURES_API_KEY="$SPOT_API_KEY"
+        FUTURES_API_SECRET="$SPOT_API_SECRET"
+    else
+        prompt_tty_secret "Enter Futures API Secret: " FUTURES_API_SECRET
+    fi
+
+    # 使用 Python 生成 config.json（保持原版逻辑）
+    "$PYTHON_BIN" - "$INSTALL_DIR" "$SPOT_URL" "$FUTURES_URL" "$WS_URL" "$RECV_WINDOW" "$SPOT_API_KEY" "$SPOT_API_SECRET" "$FUTURES_API_KEY" "$FUTURES_API_SECRET" << 'PY'
+import json, sys
+from pathlib import Path
+args = sys.argv[1:]
+config = {
+    "spot": {"base_url": args[1], "api_key": args[5], "api_secret": args[6], "recv_window": int(args[4])},
+    "futures": {"base_url": args[2], "api_key": args[7], "api_secret": args[8], "recv_window": int(args[4])},
+    "ws": {"url": args[3]}
+}
+with open(Path(args[0]) / "config.json", "w") as f:
+    json.dump(config, f, indent=2)
+PY
+    echo "✓ config.json created"
+else
+    echo "✓ Existing config.json found."
+fi
+
+echo ""
+echo "[7/9] Building OpenClaw plugin..."
+
+cd "$INSTALL_DIR/openclaw-plugin"
+npm install
+npm run build
+
+echo ""
+echo "[8/9] Installing and enabling OpenClaw plugin..."
+
+# 由于 cleanup_existing_plugin 已经修好了 JSON，这里不会再报错
 openclaw plugins install .
 openclaw plugins enable "$PLUGIN_ID"
 
-# 7. 重启
+echo ""
+echo "[9/9] Final verification..."
+
+# 确保 allow 列表包含该插件（原版逻辑增强）
+python3 - "$OPENCLAW_CONFIG" "$PLUGIN_ID" << 'PY'
+import json, sys, os
+path = sys.argv[1]
+pid = sys.argv[2]
+if os.path.exists(path):
+    with open(path, 'r') as f: data = json.load(f)
+    allow = data.setdefault("plugins", {}).setdefault("allow", [])
+    if pid not in allow:
+        allow.append(pid)
+        with open(path, 'w') as f: json.dump(data, f, indent=2)
+PY
+
 openclaw gateway --force
+
+echo ""
 echo "======================================"
-echo "✅ SUCCESS! Run with $PYTHON_BIN"
+echo "ZKE OpenClaw Plugin Installation Complete"
 echo "======================================"
