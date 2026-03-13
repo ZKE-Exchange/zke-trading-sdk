@@ -1,6 +1,6 @@
 import time
 import uuid
-from typing import Optional
+from typing import Optional, Any, Dict, List
 
 
 def _gen_withdraw_order_id() -> str:
@@ -11,93 +11,75 @@ def _gen_withdraw_order_id() -> str:
 
 def apply_withdraw(
     api,
-    coin,
-    address,
-    amount,
-    memo: Optional[str] = None,
-    withdraw_order_id: Optional[str] = None,
+    coin: str,
+    address: str,
+    amount: Any,
+    memo: Optional[Any] = None,
+    withdraw_order_id: Optional[Any] = None,
 ):
     """
     发起提现
-
-    新版文档:
-    POST /sapi/v1/withdraw/apply
-
-    body:
-    - symbol
-    - address
-    - amount
-    - withdrawOrderId
-    - label (可选)
     """
-    if not withdraw_order_id:
-        withdraw_order_id = _gen_withdraw_order_id()
+    # 兼容 AI：处理空字符串
+    safe_wo_id = str(withdraw_order_id).strip() if withdraw_order_id is not None and str(withdraw_order_id).strip() != "" else _gen_withdraw_order_id()
+    safe_memo = str(memo).strip() if memo is not None and str(memo).strip() != "" else None
+    safe_coin = str(coin).upper().strip()
 
     body = {
-        "symbol": str(coin),
-        "address": address,
-        "amount": amount,
-        "withdrawOrderId": withdraw_order_id,
+        "symbol": safe_coin,
+        "address": str(address).strip(),
+        "amount": str(amount).strip(),
+        "withdrawOrderId": safe_wo_id,
     }
 
-    if memo:
-        body["label"] = memo
+    if safe_memo:
+        body["label"] = safe_memo
 
     result = api.withdraw_apply(body)
 
     return {
-        "coin": str(coin),
+        "coin": safe_coin,
         "address": address,
         "amount": amount,
-        "memo": memo,
-        "withdraw_order_id": withdraw_order_id,
+        "memo": safe_memo,
+        "withdraw_order_id": safe_wo_id,
         "result": result
     }
 
 
 def withdraw_history(
     api,
-    coin: Optional[str] = None,
-    withdraw_id: Optional[str] = None,
-    withdraw_order_id: Optional[str] = None,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
-    page: Optional[int] = None,
-    limit: int = 20,
-):
+    coin: Optional[Any] = None,
+    withdraw_id: Optional[Any] = None,
+    withdraw_order_id: Optional[Any] = None,
+    start_time: Optional[Any] = None,
+    end_time: Optional[Any] = None,
+    page: Optional[Any] = None,
+    limit: Optional[Any] = 20,
+) -> List[Dict[str, Any]]:
     """
     查询提现记录
-
-    新版文档:
-    POST /sapi/v1/withdraw/query
-
-    body 可选:
-    - symbol
-    - withdrawId
-    - withdrawOrderId
-    - startTime
-    - endTime
-    - page
     """
     params = {}
 
-    if coin:
-        params["symbol"] = str(coin)
+    # 【核心修复】防御 AI 传来的空字符串，防止 API 报错
+    if coin is not None and str(coin).strip() != "":
+        params["symbol"] = str(coin).upper().strip()
 
-    if withdraw_id:
-        params["withdrawId"] = str(withdraw_id)
+    if withdraw_id is not None and str(withdraw_id).strip() != "":
+        params["withdrawId"] = str(withdraw_id).strip()
 
-    if withdraw_order_id:
-        params["withdrawOrderId"] = str(withdraw_order_id)
+    if withdraw_order_id is not None and str(withdraw_order_id).strip() != "":
+        params["withdrawOrderId"] = str(withdraw_order_id).strip()
 
-    if start_time:
-        params["startTime"] = str(start_time)
+    if start_time is not None and str(start_time).strip() != "":
+        params["startTime"] = str(start_time).strip()
 
-    if end_time:
-        params["endTime"] = str(end_time)
+    if end_time is not None and str(end_time).strip() != "":
+        params["endTime"] = str(end_time).strip()
 
-    if page is not None:
-        params["page"] = page
+    if page is not None and str(page).strip() != "":
+        params["page"] = int(page)
 
     result = api.withdraw_history(params)
 
@@ -105,32 +87,33 @@ def withdraw_history(
 
     if isinstance(result, dict):
         data = result.get("data")
-
         if isinstance(data, dict):
             if isinstance(data.get("withdrawList"), list):
                 rows = data["withdrawList"]
             elif isinstance(data.get("list"), list):
                 rows = data["list"]
-
         elif isinstance(data, list):
             rows = data
-
         elif isinstance(result.get("list"), list):
             rows = result["list"]
-
     elif isinstance(result, list):
         rows = result
 
     clean = []
 
     for r in rows:
+        # 【核心修复】强制提取字符串 ID，防止 JS 精度丢失
+        w_id = r.get("id")
+        wo_id = r.get("withdrawOrderId")
+        tx_id = r.get("txId") or r.get("txid")
+        
         clean.append({
             "coin": r.get("symbol"),
             "amount": r.get("amount"),
             "address": r.get("address"),
-            "withdraw_id": r.get("id"),
-            "withdraw_order_id": r.get("withdrawOrderId"),
-            "txid": r.get("txId") or r.get("txid"),
+            "withdraw_id": str(w_id) if w_id is not None else None,
+            "withdraw_order_id": str(wo_id) if wo_id is not None else None,
+            "txid": str(tx_id) if tx_id is not None else None,
             "fee": r.get("fee"),
             "status": r.get("status"),
             "info": r.get("info"),
@@ -138,7 +121,10 @@ def withdraw_history(
             "raw": r
         })
 
-    if isinstance(limit, int) and limit > 0:
-        return clean[:limit]
+    # 【核心修复】强制把 limit 转为整数，防止 AI 传字符串 "20" 导致切片失效
+    safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 20
+    
+    if safe_limit > 0:
+        return clean[:safe_limit]
 
     return clean
