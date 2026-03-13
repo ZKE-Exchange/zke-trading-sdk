@@ -71,44 +71,48 @@ def _extract_transfer_rows(result: Any) -> List[Dict[str, Any]]:
 
 def transfer_between_accounts(
     api,
-    coin_symbol: str,
-    amount: str,
-    from_account: str,
-    to_account: str,
+    coin_symbol: Any,
+    amount: Any,
+    from_account: Any,
+    to_account: Any,
 ) -> Dict[str, Any]:
     """
     现货 / 合约 之间划转
     """
-    from_acc = _normalize_account_type(from_account)
-    to_acc = _normalize_account_type(to_account)
+    from_acc = _normalize_account_type(str(from_account))
+    to_acc = _normalize_account_type(str(to_account))
 
     if from_acc == to_acc:
         raise ValueError("fromAccount 和 toAccount 不能相同。")
 
-    if not coin_symbol or str(coin_symbol).strip() == "":
+    if coin_symbol is None or str(coin_symbol).strip() == "":
         raise ValueError("coin_symbol 不能为空。")
 
-    if not amount or str(amount).strip() == "":
+    if amount is None or str(amount).strip() == "":
         raise ValueError("amount 不能为空。")
 
+    # 【修复】去除了强制的 .upper()，原样传递
+    safe_coin = str(coin_symbol).strip()
+    safe_amount = str(amount).strip()
+
     result = api.asset_transfer(
-        coin_symbol=str(coin_symbol).upper(),
-        amount=str(amount),
+        coin_symbol=safe_coin,
+        amount=safe_amount,
         from_account=from_acc,
         to_account=to_acc,
     )
 
     normalized = _normalize_transfer_result(result)
     normalized["request"] = {
-        "coinSymbol": str(coin_symbol).upper(),
-        "amount": str(amount),
+        "coinSymbol": safe_coin,
+        "amount": safe_amount,
         "fromAccount": from_acc,
         "toAccount": to_acc,
     }
     return normalized
 
 
-def transfer_spot_to_futures(api, coin_symbol: str, amount: str) -> Dict[str, Any]:
+def transfer_spot_to_futures(api, coin_symbol: Any, amount: Any) -> Dict[str, Any]:
     """
     现货 -> 合约
     """
@@ -121,7 +125,7 @@ def transfer_spot_to_futures(api, coin_symbol: str, amount: str) -> Dict[str, An
     )
 
 
-def transfer_futures_to_spot(api, coin_symbol: str, amount: str) -> Dict[str, Any]:
+def transfer_futures_to_spot(api, coin_symbol: Any, amount: Any) -> Dict[str, Any]:
     """
     合约 -> 现货
     """
@@ -136,10 +140,10 @@ def transfer_futures_to_spot(api, coin_symbol: str, amount: str) -> Dict[str, An
 
 def query_transfer_history(
     api,
-    transfer_id: Optional[str] = None,
-    coin_symbol: Optional[str] = None,
-    from_account: Optional[str] = None,
-    to_account: Optional[str] = None,
+    transfer_id: Optional[Any] = None,
+    coin_symbol: Optional[Any] = None,
+    from_account: Optional[Any] = None,
+    to_account: Optional[Any] = None,
     start_time: Optional[Any] = None,
     end_time: Optional[Any] = None,
     page: Optional[Any] = 1,
@@ -158,9 +162,9 @@ def query_transfer_history(
     if not norm_from or not norm_to:
         raise ValueError("查询划转记录时必须提供 from_account 和 to_account，例如 EXCHANGE FUTURE。")
 
-    # 确保安全类型转换
+    # 确保安全类型转换，去除强制 upper()
     safe_transfer_id = str(transfer_id).strip() if transfer_id is not None and str(transfer_id).strip() != "" else None
-    safe_coin = str(coin_symbol).upper().strip() if coin_symbol is not None and str(coin_symbol).strip() != "" else None
+    safe_coin = str(coin_symbol).strip() if coin_symbol is not None and str(coin_symbol).strip() != "" else None
 
     # 【核心修复】使用显式 None 和空字符串判断，完美保护合法的 0 值
     safe_start_time = int(start_time) if start_time is not None and str(start_time).strip() != "" else None
