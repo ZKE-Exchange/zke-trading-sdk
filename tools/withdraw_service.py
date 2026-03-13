@@ -23,7 +23,9 @@ def apply_withdraw(
     # 兼容 AI：处理空字符串
     safe_wo_id = str(withdraw_order_id).strip() if withdraw_order_id is not None and str(withdraw_order_id).strip() != "" else _gen_withdraw_order_id()
     safe_memo = str(memo).strip() if memo is not None and str(memo).strip() != "" else None
-    safe_coin = str(coin).upper().strip()
+    
+    # 【修复】去除了 .upper()，忠实传递原本的币种格式
+    safe_coin = str(coin).strip()
 
     body = {
         "symbol": safe_coin,
@@ -62,9 +64,9 @@ def withdraw_history(
     """
     params = {}
 
-    # 【核心修复】防御 AI 传来的空字符串，防止 API 报错
+    # 【修复】防空参的同时，去除了 .upper()
     if coin is not None and str(coin).strip() != "":
-        params["symbol"] = str(coin).upper().strip()
+        params["symbol"] = str(coin).strip()
 
     if withdraw_id is not None and str(withdraw_id).strip() != "":
         params["withdrawId"] = str(withdraw_id).strip()
@@ -102,7 +104,7 @@ def withdraw_history(
     clean = []
 
     for r in rows:
-        # 【核心修复】强制提取字符串 ID，防止 JS 精度丢失
+        # 【核心防御】强制提取字符串 ID，防止 JS 精度丢失
         w_id = r.get("id")
         wo_id = r.get("withdrawOrderId")
         tx_id = r.get("txId") or r.get("txid")
@@ -121,7 +123,7 @@ def withdraw_history(
             "raw": r
         })
 
-    # 【核心修复】强制把 limit 转为整数，防止 AI 传字符串 "20" 导致切片失效
+    # 【核心防御】强制把 limit 转为整数，防止 AI 传字符串 "20" 导致切片失效
     safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 20
     
     if safe_limit > 0:
