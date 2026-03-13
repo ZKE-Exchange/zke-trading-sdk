@@ -26,15 +26,20 @@ class FuturesPublicApi:
         """
         return self.client.request("GET", "/fapi/v1/contracts")
 
-    def ticker(self, contract_name: str) -> Dict[str, Any]:
+    def ticker(self, contract_name: Any) -> Dict[str, Any]:
         """
         GET /fapi/v1/ticker
         params: contractName
         """
+        # 【AI 加固】强力清洗合约名称
+        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        if not safe_contract:
+            raise ValueError("查询合约 Ticker 失败：contractName 不能为空")
+
         return self.client.request(
             "GET",
             "/fapi/v1/ticker",
-            params={"contractName": contract_name}
+            params={"contractName": safe_contract}
         )
 
     def ticker_all(self) -> Dict[str, Any]:
@@ -43,46 +48,65 @@ class FuturesPublicApi:
         """
         return self.client.request("GET", "/fapi/v1/ticker_all")
 
-    def depth(self, contract_name: str, limit: int = 100) -> Dict[str, Any]:
+    def depth(self, contract_name: Any, limit: Any = 100) -> Dict[str, Any]:
         """
         GET /fapi/v1/depth
         params: contractName, limit
         """
+        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        if not safe_contract:
+            raise ValueError("查询合约深度失败：contractName 不能为空")
+            
+        # 【AI 加固】安全转换 limit
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
+
         return self.client.request(
             "GET",
             "/fapi/v1/depth",
-            params={"contractName": contract_name, "limit": limit}
+            params={"contractName": safe_contract, "limit": safe_limit}
         )
 
-    def index(self, contract_name: str) -> Dict[str, Any]:
+    def index(self, contract_name: Any) -> Dict[str, Any]:
         """
         GET /fapi/v1/index
         params: contractName
         """
+        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        if not safe_contract:
+            raise ValueError("查询合约指数失败：contractName 不能为空")
+
         return self.client.request(
             "GET",
             "/fapi/v1/index",
-            params={"contractName": contract_name}
+            params={"contractName": safe_contract}
         )
 
     def klines(
         self,
-        contract_name: str,
-        interval: str,
-        limit: int = 100
+        contract_name: Any,
+        interval: Any,
+        limit: Any = 100
     ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """
         GET /fapi/v1/klines
         params: contractName, interval, limit
         """
-        interval = ensure_futures_interval(interval)
+        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        if not safe_contract:
+            raise ValueError("查询合约 K线 失败：contractName 不能为空")
+            
+        # 【AI 加固】防止 interval 传错
+        safe_interval = str(interval).strip() if interval else ""
+        interval_val = ensure_futures_interval(safe_interval)
+        
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
 
         return self.client.request(
             "GET",
             "/fapi/v1/klines",
             params={
-                "contractName": contract_name,
-                "interval": interval,
-                "limit": limit
+                "contractName": safe_contract,
+                "interval": interval_val,
+                "limit": safe_limit
             }
         )
