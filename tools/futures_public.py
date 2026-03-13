@@ -31,8 +31,8 @@ class FuturesPublicApi:
         GET /fapi/v1/ticker
         params: contractName
         """
-        # 【AI 加固】强力清洗合约名称
-        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        # 【修复】去除了 .upper()，忠实传递上层传来的 contractName 原貌
+        safe_contract = str(contract_name).strip() if contract_name is not None else ""
         if not safe_contract:
             raise ValueError("查询合约 Ticker 失败：contractName 不能为空")
 
@@ -53,11 +53,10 @@ class FuturesPublicApi:
         GET /fapi/v1/depth
         params: contractName, limit
         """
-        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        safe_contract = str(contract_name).strip() if contract_name is not None else ""
         if not safe_contract:
             raise ValueError("查询合约深度失败：contractName 不能为空")
             
-        # 【AI 加固】安全转换 limit
         safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
 
         return self.client.request(
@@ -71,7 +70,7 @@ class FuturesPublicApi:
         GET /fapi/v1/index
         params: contractName
         """
-        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        safe_contract = str(contract_name).strip() if contract_name is not None else ""
         if not safe_contract:
             raise ValueError("查询合约指数失败：contractName 不能为空")
 
@@ -91,12 +90,11 @@ class FuturesPublicApi:
         GET /fapi/v1/klines
         params: contractName, interval, limit
         """
-        safe_contract = str(contract_name).strip().upper() if contract_name else ""
+        safe_contract = str(contract_name).strip() if contract_name is not None else ""
         if not safe_contract:
             raise ValueError("查询合约 K线 失败：contractName 不能为空")
             
-        # 【AI 加固】防止 interval 传错
-        safe_interval = str(interval).strip() if interval else ""
+        safe_interval = str(interval).strip() if interval is not None else ""
         interval_val = ensure_futures_interval(safe_interval)
         
         safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
