@@ -17,16 +17,16 @@ class SpotPublicApi:
     def symbols(self) -> Dict[str, Any]:
         return self.client.request("GET", "/sapi/v2/symbols")
 
-    def ticker(self, symbol: str) -> Dict[str, Any]:
-        # 【AI 加固】强力清理：去空格、去下划线、转大写，防止 AI 传 "btc_usdt" 或 " btcUsdt "
-        safe_symbol = str(symbol).replace("_", "").strip().upper() if symbol else ""
+    def ticker(self, symbol: Any) -> Dict[str, Any]:
+        # 【修复】去除了 .upper() 和 .replace，忠实传递底层需要的 symbol 格式
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
         if not safe_symbol:
             raise ValueError("查询 Ticker 失败：交易对 symbol 不能为空")
             
         return self.client.request("GET", "/sapi/v2/ticker", params={"symbol": safe_symbol})
 
-    def depth(self, symbol: str, limit: Any = 100) -> Dict[str, Any]:
-        safe_symbol = str(symbol).replace("_", "").strip().upper() if symbol else ""
+    def depth(self, symbol: Any, limit: Any = 100) -> Dict[str, Any]:
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
         if not safe_symbol:
             raise ValueError("查询深度失败：交易对 symbol 不能为空")
             
@@ -39,8 +39,8 @@ class SpotPublicApi:
             params={"symbol": safe_symbol, "limit": safe_limit}
         )
 
-    def trades(self, symbol: str, limit: Any = 100) -> Dict[str, Any]:
-        safe_symbol = str(symbol).replace("_", "").strip().upper() if symbol else ""
+    def trades(self, symbol: Any, limit: Any = 100) -> Dict[str, Any]:
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
         if not safe_symbol:
             raise ValueError("查询近期交易失败：交易对 symbol 不能为空")
             
@@ -52,8 +52,8 @@ class SpotPublicApi:
             params={"symbol": safe_symbol, "limit": safe_limit}
         )
 
-    def klines(self, symbol: str, interval: str) -> Any:
-        safe_symbol = str(symbol).replace("_", "").strip().upper() if symbol else ""
+    def klines(self, symbol: Any, interval: Any) -> Any:
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
         if not safe_symbol:
             raise ValueError("查询 K线 失败：交易对 symbol 不能为空")
             
