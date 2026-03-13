@@ -1,4 +1,5 @@
 import json
+from typing import Any, Optional
 
 def prepare_order(registry, symbol, volume, price, order_type):
     """
@@ -17,13 +18,13 @@ def prepare_order(registry, symbol, volume, price, order_type):
 def test_order(
     private_api,
     registry,
-    symbol,
-    side,
-    order_type,
-    volume,
-    price=None,
-    new_client_order_id="",
-    recv_window=5000,
+    symbol: Any,
+    side: Any,
+    order_type: Any,
+    volume: Any,
+    price: Optional[Any] = None,
+    new_client_order_id: Any = "",
+    recv_window: Any = 5000,
 ):
     """
     测试下单接口（不真实下单）
@@ -46,37 +47,29 @@ def test_order(
 def create_order(
     private_api,
     registry,
-    symbol,
-    side,
-    order_type,
-    volume,
-    price=None,
-    new_client_order_id="",
-    recv_window=5000,
-    trigger_price=None,
+    symbol: Any,
+    side: Any,
+    order_type: Any,
+    volume: Any,
+    price: Optional[Any] = None,
+    new_client_order_id: Any = "",
+    recv_window: Any = 5000,
+    trigger_price: Optional[Any] = None,
 ):
     """
-    创建真实订单 - 已修复参数溢出问题
+    创建真实订单 - 彻底解决参数溢出报错
     """
     data = prepare_order(registry, symbol, volume, price, order_type)
 
-    # 1. 组装基础参数
-    params = {
-        "symbol": data["api_symbol"],
-        "volume": data["volume"],
-        "side": side,
-        "order_type": order_type,
-        "price": data["price"],
-        "new_client_order_id": new_client_order_id,
-        "recv_window": recv_window,
-    }
-
-    # 2. 只有当 trigger_price 真的有值时（止盈止损/合约），才动态加入
-    if trigger_price is not None and str(trigger_price).strip() != "":
-        params["trigger_price"] = trigger_price
-
-    # 3. 使用 **params 动态传参，API 没定义的参数不会被强行发送
-    result = private_api.create_order(**params)
+    result = private_api.create_order(
+        symbol=data["api_symbol"],
+        volume=data["volume"],
+        side=side,
+        order_type=order_type,
+        price=data["price"],
+        new_client_order_id=new_client_order_id,
+        recv_window=recv_window,
+    )
 
     return data, result
 
@@ -84,25 +77,36 @@ def create_order(
 def cancel_order(
     private_api,
     registry,
-    symbol,
-    order_id=None,
-    client_order_id=None,
+    symbol: Any,
+    order_id: Optional[Any] = None,
+    client_order_id: Optional[Any] = None,
 ):
     """
     撤销订单
     """
     api_symbol = registry.get_api_symbol(symbol)
 
+    # 【AI 加固】防止 AI 两个 ID 都传空字符串，导致向交易所发出无效的撤单请求
+    safe_oid = str(order_id).strip() if order_id is not None and str(order_id).strip() != "" else None
+    safe_cid = str(client_order_id).strip() if client_order_id is not None and str(client_order_id).strip() != "" else None
+
+    if not safe_oid and not safe_cid:
+        raise ValueError("撤单失败：必须提供 order_id 或 client_order_id 其中之一")
+
     return private_api.cancel_order(
         api_symbol,
-        order_id=order_id,
-        client_order_id=client_order_id,
+        order_id=safe_oid,
+        client_order_id=safe_cid,
     )
 
 
-def open_orders(private_api, registry, symbol, limit=100):
+def open_orders(private_api, registry, symbol: Any, limit: Any = 100):
     """
     查询当前挂单
     """
     api_symbol = registry.get_api_symbol(symbol)
-    return private_api.open_orders(api_symbol, limit=limit)
+    
+    # 【AI 加固】拦截空字符串和异常类型，确保分页不崩
+    safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
+    
+    return private_api.open_orders(api_symbol, limit=safe_limit)
