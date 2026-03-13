@@ -62,8 +62,26 @@ def get_ws_url() -> str:
     return url
 
 
+def _sanitize_data(data: Any) -> Any:
+    """精度保险锁：递归遍历所有数据，将所有 ID 相关的字段强制转为字符串"""
+    if isinstance(data, list):
+        return [_sanitize_data(item) for item in data]
+    elif isinstance(data, dict):
+        new_dict = {}
+        id_keys = {"orderId", "order_id", "clientOrderId", "client_order_id", "position_id", "positionId", "orderIdString"}
+        for k, v in data.items():
+            if k in id_keys and v is not None:
+                new_dict[k] = str(v)
+            else:
+                new_dict[k] = _sanitize_data(v)
+        return new_dict
+    return data
+
+
 def pretty_print(data: Any):
-    print(json.dumps(data, ensure_ascii=False, indent=2))
+    # 【修复】先进行清洗转字符串，防止 AI 精度丢失，再输出 JSON
+    sanitized = _sanitize_data(data)
+    print(json.dumps(sanitized, ensure_ascii=False, indent=2))
 
 
 def print_help():
@@ -350,7 +368,7 @@ def main():
 
         if cmd == "order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             api_symbol = registry.get_api_symbol(symbol)
             pretty_print(private_api.order_query(api_symbol, order_id=order_id))
             return
@@ -403,12 +421,13 @@ def main():
                 private_api, registry, symbol, side, order_type, volume, price
             )
 
-            print("订单参数校验通过：")
-            print(f"交易对: {data['display_symbol']}")
-            print(f"API symbol: {data['api_symbol']}")
-            print(f"数量: {data['volume']}")
+            # 【修复】人类提示输出到 stderr，防止 AI 解析 JSON 报错
+            print("订单参数校验通过：", file=sys.stderr)
+            print(f"交易对: {data['display_symbol']}", file=sys.stderr)
+            print(f"API symbol: {data['api_symbol']}", file=sys.stderr)
+            print(f"数量: {data['volume']}", file=sys.stderr)
             if data["price"]:
-                print(f"价格: {data['price']}")
+                print(f"价格: {data['price']}", file=sys.stderr)
             pretty_print(result)
             return
 
@@ -423,18 +442,19 @@ def main():
                 private_api, registry, symbol, side, order_type, volume, price
             )
 
-            print("订单参数校验通过：")
-            print(f"交易对: {data['display_symbol']}")
-            print(f"API symbol: {data['api_symbol']}")
-            print(f"数量: {data['volume']}")
+            # 【修复】人类提示输出到 stderr
+            print("订单参数校验通过：", file=sys.stderr)
+            print(f"交易对: {data['display_symbol']}", file=sys.stderr)
+            print(f"API symbol: {data['api_symbol']}", file=sys.stderr)
+            print(f"数量: {data['volume']}", file=sys.stderr)
             if data["price"]:
-                print(f"价格: {data['price']}")
+                print(f"价格: {data['price']}", file=sys.stderr)
             pretty_print(result)
             return
 
         if cmd == "cancel-order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             result = order_service.cancel_order(private_api, registry, symbol, order_id=order_id)
             pretty_print(result)
             return
@@ -512,20 +532,21 @@ def main():
                 margin_api, registry, symbol, side, order_type, volume, price
             )
 
-            print("杠杆订单参数：")
-            print(f"交易对: {data['display_symbol']}")
-            print(f"API symbol: {data['api_symbol']}")
-            print(f"方向: {data['side']}")
-            print(f"类型: {data['order_type']}")
-            print(f"数量: {data['volume']}")
+            # 【修复】人类提示输出到 stderr
+            print("杠杆订单参数：", file=sys.stderr)
+            print(f"交易对: {data['display_symbol']}", file=sys.stderr)
+            print(f"API symbol: {data['api_symbol']}", file=sys.stderr)
+            print(f"方向: {data['side']}", file=sys.stderr)
+            print(f"类型: {data['order_type']}", file=sys.stderr)
+            print(f"数量: {data['volume']}", file=sys.stderr)
             if data["price"] is not None:
-                print(f"价格: {data['price']}")
+                print(f"价格: {data['price']}", file=sys.stderr)
             pretty_print(result)
             return
 
         if cmd == "margin-order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             pretty_print(
                 margin_order_service.order_query(
                     margin_api, registry, symbol, order_id=order_id
@@ -535,7 +556,7 @@ def main():
 
         if cmd == "margin-cancel-order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             pretty_print(
                 margin_order_service.cancel_order(
                     margin_api, registry, symbol, order_id=order_id
@@ -664,7 +685,7 @@ def main():
 
         if cmd == "futures-order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             pretty_print(
                 futures_order_service.order_query(
                     futures_private, futures_registry, symbol, order_id=order_id
@@ -732,15 +753,16 @@ def main():
                 price
             )
 
-            print("合约订单参数：")
-            print(f"合约: {data.get('contractName', data.get('contract_name'))}")
-            print(f"方向: {data.get('side')}")
-            print(f"开平: {data.get('open', data.get('open_action'))}")
-            print(f"仓位类型: {data.get('positionType', data.get('position_type'))}")
-            print(f"类型: {data.get('type', data.get('order_type'))}")
-            print(f"数量: {data.get('volume')}")
+            # 【修复】人类提示输出到 stderr
+            print("合约订单参数：", file=sys.stderr)
+            print(f"合约: {data.get('contractName', data.get('contract_name'))}", file=sys.stderr)
+            print(f"方向: {data.get('side')}", file=sys.stderr)
+            print(f"开平: {data.get('open', data.get('open_action'))}", file=sys.stderr)
+            print(f"仓位类型: {data.get('positionType', data.get('position_type'))}", file=sys.stderr)
+            print(f"类型: {data.get('type', data.get('order_type'))}", file=sys.stderr)
+            print(f"数量: {data.get('volume')}", file=sys.stderr)
             if data.get("price") is not None:
-                print(f"价格: {data['price']}")
+                print(f"价格: {data['price']}", file=sys.stderr)
             pretty_print(result)
             return
 
@@ -774,7 +796,7 @@ def main():
 
         if cmd == "futures-cancel-order":
             symbol = sys.argv[2]
-            order_id = sys.argv[3]
+            order_id = str(sys.argv[3]) # 【修复】强制字符串
             pretty_print(futures_order_service.cancel_order(futures_private, futures_registry, symbol, order_id))
             return
 
@@ -857,11 +879,12 @@ def main():
         print_help()
 
     except ZKEApiError as e:
-        print(spot_client.explain_error(e))
+        # 【修复】强制报错信息输出 JSON，防止 AI 崩溃
+        pretty_print({"status": "error", "code": getattr(e, "code", -1), "message": spot_client.explain_error(e)})
     except (SymbolNotFoundError, SymbolValidationError, ValueError, IndexError) as e:
-        print(f"参数校验失败: {e}")
+        pretty_print({"status": "error", "type": "validation_error", "message": f"参数校验失败: {e}"})
     except Exception as e:
-        print(f"程序运行失败: {e}")
+        pretty_print({"status": "error", "type": "runtime_error", "message": f"程序运行失败: {e}"})
 
 
 if __name__ == "__main__":
