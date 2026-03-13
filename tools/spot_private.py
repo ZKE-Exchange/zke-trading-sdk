@@ -15,17 +15,12 @@ class SpotPrivateApi:
     def account(self) -> Dict[str, Any]:
         """
         账户信息
-        文档：
-        GET /sapi/v1/account
         """
         return self.client.request("GET", "/sapi/v1/account", signed=True)
 
     def exchange_account(self) -> Dict[str, Any]:
         """
         查询用户现货账户资产
-        文档：
-        POST /sapi/v1/asset/exchange/account
-        请求体：{}
         """
         return self.client.request(
             "POST",
@@ -34,22 +29,15 @@ class SpotPrivateApi:
             signed=True,
         )
 
-    def account_by_type(self, account_type: str) -> Dict[str, Any]:
+    def account_by_type(self, account_type: Any) -> Dict[str, Any]:
         """
         查询用户可划转资产 / 指定账户资产
-        文档：
-        POST /sapi/v1/asset/account/by_type
-
-        accountType:
-        1: spot
-        2: isolated
-        3: cross
-        4: otc
-        5: contract
         """
-        body = {
-            "accountType": str(account_type)
-        }
+        safe_type = str(account_type).strip() if account_type is not None else ""
+        if not safe_type:
+            raise ValueError("accountType 不能为空")
+            
+        body = {"accountType": safe_type}
         return self.client.request(
             "POST",
             "/sapi/v1/asset/account/by_type",
@@ -63,115 +51,105 @@ class SpotPrivateApi:
 
     def order_query(
         self,
-        symbol: str,
-        order_id: Optional[str] = None,
-        client_order_id: Optional[str] = None
+        symbol: Any,
+        order_id: Optional[Any] = None,
+        client_order_id: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         查询订单
-        文档：
-        GET /sapi/v2/order
-        参数：
-        - symbol
-        - orderId
-        - newClientorderId
         """
-        params: Dict[str, Any] = {"symbol": symbol}
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        if not safe_symbol:
+            raise ValueError("查询订单失败：symbol 不能为空")
 
-        if order_id:
-            params["orderId"] = str(order_id)
-        if client_order_id:
-            params["newClientorderId"] = str(client_order_id)
+        params: Dict[str, Any] = {"symbol": safe_symbol}
+
+        if order_id is not None and str(order_id).strip() != "":
+            params["orderId"] = str(order_id).strip()
+        if client_order_id is not None and str(client_order_id).strip() != "":
+            params["newClientorderId"] = str(client_order_id).strip()
 
         return self.client.request("GET", "/sapi/v2/order", params=params, signed=True)
 
-    def open_orders(self, symbol: str, limit: int = 100) -> Any:
+    def open_orders(self, symbol: Any, limit: Any = 100) -> Any:
         """
         当前挂单
-        文档：
-        GET /sapi/v2/openOrders
         """
-        params: Dict[str, Any] = {
-            "symbol": symbol,
-            "limit": int(limit),
-        }
-        return self.client.request(
-            "GET",
-            "/sapi/v2/openOrders",
-            params=params,
-            signed=True
-        )
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        if not safe_symbol:
+            raise ValueError("查询挂单失败：symbol 不能为空")
+            
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
 
-    def my_trades(self, symbol: str, limit: int = 100, from_id: Optional[str] = None) -> Any:
+        params: Dict[str, Any] = {
+            "symbol": safe_symbol,
+            "limit": safe_limit,
+        }
+        return self.client.request("GET", "/sapi/v2/openOrders", params=params, signed=True)
+
+    def my_trades(self, symbol: Any, limit: Any = 100, from_id: Optional[Any] = None) -> Any:
         """
         现货成交记录 v2
-        文档：
-        GET /sapi/v2/myTrades
         """
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        if not safe_symbol:
+            raise ValueError("查询成交记录失败：symbol 不能为空")
+            
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
+
         params: Dict[str, Any] = {
-            "symbol": symbol,
-            "limit": int(limit),
+            "symbol": safe_symbol,
+            "limit": safe_limit,
         }
 
-        if from_id:
-            params["fromId"] = str(from_id)
+        if from_id is not None and str(from_id).strip() != "":
+            params["fromId"] = str(from_id).strip()
 
         return self.client.request("GET", "/sapi/v2/myTrades", params=params, signed=True)
 
     def my_trades_v3(
         self,
-        symbol: Optional[str] = None,
-        limit: int = 50,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        symbol: Optional[Any] = None,
+        limit: Any = 50,
+        start_time: Optional[Any] = None,
+        end_time: Optional[Any] = None,
     ) -> Any:
         """
         现货成交记录 v3
-        文档：
-        GET /sapi/v3/myTrades
-
-        说明：
-        - symbol 可选；不传时会更高权重
-        - startTime / endTime 按文档为最近 6 个月内，区间 <= 7 天
         """
-        params: Dict[str, Any] = {
-            "limit": int(limit),
-        }
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 50
+        params: Dict[str, Any] = {"limit": safe_limit}
 
-        if symbol:
-            params["symbol"] = symbol
-        if start_time is not None:
+        if symbol is not None and str(symbol).strip() != "":
+            params["symbol"] = str(symbol).strip()
+            
+        # 兼容时间戳 0 和 AI 空字符串
+        if start_time is not None and str(start_time).strip() != "":
             params["startTime"] = int(start_time)
-        if end_time is not None:
+        if end_time is not None and str(end_time).strip() != "":
             params["endTime"] = int(end_time)
 
         return self.client.request("GET", "/sapi/v3/myTrades", params=params, signed=True)
 
     def history_orders(
         self,
-        symbol: Optional[str] = None,
-        limit: int = 50,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        symbol: Optional[Any] = None,
+        limit: Any = 50,
+        start_time: Optional[Any] = None,
+        end_time: Optional[Any] = None,
     ) -> Any:
         """
         现货历史订单
-        文档：
-        GET /sapi/v3/historyOrders
-
-        说明：
-        - symbol 可选；不传时会更高权重
-        - startTime / endTime 按文档为最近 6 个月内，区间 <= 7 天
         """
-        params: Dict[str, Any] = {
-            "limit": int(limit),
-        }
+        safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 50
+        params: Dict[str, Any] = {"limit": safe_limit}
 
-        if symbol:
-            params["symbol"] = symbol
-        if start_time is not None:
+        if symbol is not None and str(symbol).strip() != "":
+            params["symbol"] = str(symbol).strip()
+            
+        if start_time is not None and str(start_time).strip() != "":
             params["startTime"] = int(start_time)
-        if end_time is not None:
+        if end_time is not None and str(end_time).strip() != "":
             params["endTime"] = int(end_time)
 
         return self.client.request("GET", "/sapi/v3/historyOrders", params=params, signed=True)
@@ -182,95 +160,105 @@ class SpotPrivateApi:
 
     def test_order(
         self,
-        symbol: str,
-        volume: str,
-        side: str,
-        order_type: str,
-        price: Optional[str] = None,
-        new_client_order_id: str = "",
-        recv_window: int = 5000,
+        symbol: Any,
+        volume: Any,
+        side: Any,
+        order_type: Any,
+        price: Optional[Any] = None,
+        new_client_order_id: Any = "",
+        recv_window: Any = 5000,
     ) -> Dict[str, Any]:
         """
         测试下单
-        文档：
-        POST /sapi/v2/order/test
         """
-        side = ensure_side(side)
-        order_type = ensure_order_type(order_type)
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        safe_vol = str(volume).strip() if volume is not None else ""
+        
+        if not safe_symbol: raise ValueError("下单失败：symbol 不能为空")
+        if not safe_vol: raise ValueError("下单失败：volume 不能为空")
+
+        safe_side = ensure_side(str(side))
+        safe_type = ensure_order_type(str(order_type))
+        safe_recv = int(recv_window) if recv_window is not None and str(recv_window).strip() != "" else 5000
 
         body: Dict[str, Any] = {
-            "symbol": symbol,
-            "volume": str(volume),
-            "side": side,
-            "type": order_type,
-            "recvWindow": int(recv_window),
+            "symbol": safe_symbol,
+            "volume": safe_vol,
+            "side": safe_side,
+            "type": safe_type,
+            "recvWindow": safe_recv,
         }
 
-        if order_type == "LIMIT":
-            if price is None:
+        if safe_type == "LIMIT":
+            if price is None or str(price).strip() == "":
                 raise ValueError("LIMIT 订单必须提供 price。")
-            body["price"] = str(price)
+            body["price"] = str(price).strip()
 
-        if new_client_order_id:
-            body["newClientorderId"] = str(new_client_order_id)
+        if new_client_order_id is not None and str(new_client_order_id).strip() != "":
+            body["newClientorderId"] = str(new_client_order_id).strip()
 
         return self.client.request("POST", "/sapi/v2/order/test", body=body, signed=True)
 
     def create_order(
         self,
-        symbol: str,
-        volume: str,
-        side: str,
-        order_type: str,
-        price: Optional[str] = None,
-        new_client_order_id: str = "",
-        recv_window: int = 5000,
+        symbol: Any,
+        volume: Any,
+        side: Any,
+        order_type: Any,
+        price: Optional[Any] = None,
+        new_client_order_id: Any = "",
+        recv_window: Any = 5000,
     ) -> Dict[str, Any]:
         """
         创建订单
-        文档：
-        POST /sapi/v2/order
-
-        当前按你现有 common.py，仅严格支持 LIMIT / MARKET
         """
-        side = ensure_side(side)
-        order_type = ensure_order_type(order_type)
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        safe_vol = str(volume).strip() if volume is not None else ""
+        
+        if not safe_symbol: raise ValueError("下单失败：symbol 不能为空")
+        if not safe_vol: raise ValueError("下单失败：volume 不能为空")
+
+        safe_side = ensure_side(str(side))
+        safe_type = ensure_order_type(str(order_type))
+        safe_recv = int(recv_window) if recv_window is not None and str(recv_window).strip() != "" else 5000
 
         body: Dict[str, Any] = {
-            "symbol": symbol,
-            "volume": str(volume),
-            "side": side,
-            "type": order_type,
-            "recvWindow": int(recv_window),
+            "symbol": safe_symbol,
+            "volume": safe_vol,
+            "side": safe_side,
+            "type": safe_type,
+            "recvWindow": safe_recv,
         }
 
-        if order_type == "LIMIT":
-            if price is None:
+        if safe_type == "LIMIT":
+            if price is None or str(price).strip() == "":
                 raise ValueError("LIMIT 订单必须提供 price。")
-            body["price"] = str(price)
+            body["price"] = str(price).strip()
 
-        if new_client_order_id:
-            body["newClientOrderId"] = str(new_client_order_id)
+        if new_client_order_id is not None and str(new_client_order_id).strip() != "":
+            body["newClientOrderId"] = str(new_client_order_id).strip()
 
         return self.client.request("POST", "/sapi/v2/order", body=body, signed=True)
 
     def cancel_order(
         self,
-        symbol: str,
-        order_id: Optional[str] = None,
-        client_order_id: Optional[str] = None
+        symbol: Any,
+        order_id: Optional[Any] = None,
+        client_order_id: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         撤单
-        文档：
-        POST /sapi/v2/cancel
         """
-        body: Dict[str, Any] = {"symbol": symbol}
+        safe_symbol = str(symbol).strip() if symbol is not None else ""
+        if not safe_symbol: 
+            raise ValueError("撤单失败：symbol 不能为空")
 
-        if order_id:
-            body["orderId"] = str(order_id)
-        if client_order_id:
-            body["newClientOrderId"] = str(client_order_id)
+        body: Dict[str, Any] = {"symbol": safe_symbol}
+
+        if order_id is not None and str(order_id).strip() != "":
+            body["orderId"] = str(order_id).strip()
+        if client_order_id is not None and str(client_order_id).strip() != "":
+            body["newClientOrderId"] = str(client_order_id).strip()
 
         return self.client.request("POST", "/sapi/v2/cancel", body=body, signed=True)
 
@@ -280,101 +268,73 @@ class SpotPrivateApi:
 
     def asset_transfer(
         self,
-        coin_symbol: str,
-        amount: str,
-        from_account: str,
-        to_account: str,
+        coin_symbol: Any,
+        amount: Any,
+        from_account: Any,
+        to_account: Any,
     ) -> Dict[str, Any]:
         """
         账户划转
-        文档：
-        POST /sapi/v1/asset/transfer
-
-        fromAccount / toAccount:
-        EXCHANGE / FUTURE
         """
+        safe_coin = str(coin_symbol).strip() if coin_symbol is not None else ""
+        safe_amt = str(amount).strip() if amount is not None else ""
+        safe_from = str(from_account).strip() if from_account is not None else ""
+        safe_to = str(to_account).strip() if to_account is not None else ""
+
+        if not safe_coin or not safe_amt or not safe_from or not safe_to:
+            raise ValueError("划转失败：参数不完整。")
+
         body: Dict[str, Any] = {
-            "coinSymbol": str(coin_symbol),
-            "amount": str(amount),
-            "fromAccount": str(from_account),
-            "toAccount": str(to_account),
+            "coinSymbol": safe_coin,
+            "amount": safe_amt,
+            "fromAccount": safe_from,
+            "toAccount": safe_to,
         }
 
-        return self.client.request(
-            "POST",
-            "/sapi/v1/asset/transfer",
-            body=body,
-            signed=True,
-        )
+        return self.client.request("POST", "/sapi/v1/asset/transfer", body=body, signed=True)
 
     def asset_transfer_query(
         self,
-        transfer_id: Optional[str] = None,
-        coin_symbol: Optional[str] = None,
-        from_account: Optional[str] = None,
-        to_account: Optional[str] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        page: Optional[int] = None,
-        limit: Optional[int] = None,
+        transfer_id: Optional[Any] = None,
+        coin_symbol: Optional[Any] = None,
+        from_account: Optional[Any] = None,
+        to_account: Optional[Any] = None,
+        start_time: Optional[Any] = None,
+        end_time: Optional[Any] = None,
+        page: Optional[Any] = None,
+        limit: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         划转记录查询
-        文档：
-        POST /sapi/v1/asset/transferQuery
         """
         body: Dict[str, Any] = {}
 
-        if transfer_id:
-            body["transferId"] = str(transfer_id)
-        if coin_symbol:
-            body["coinSymbol"] = str(coin_symbol)
-        if from_account:
-            body["fromAccount"] = str(from_account)
-        if to_account:
-            body["toAccount"] = str(to_account)
-        if start_time is not None:
+        if transfer_id is not None and str(transfer_id).strip() != "":
+            body["transferId"] = str(transfer_id).strip()
+        if coin_symbol is not None and str(coin_symbol).strip() != "":
+            body["coinSymbol"] = str(coin_symbol).strip()
+        if from_account is not None and str(from_account).strip() != "":
+            body["fromAccount"] = str(from_account).strip()
+        if to_account is not None and str(to_account).strip() != "":
+            body["toAccount"] = str(to_account).strip()
+            
+        if start_time is not None and str(start_time).strip() != "":
             body["startTime"] = int(start_time)
-        if end_time is not None:
+        if end_time is not None and str(end_time).strip() != "":
             body["endTime"] = int(end_time)
-        if page is not None:
+        if page is not None and str(page).strip() != "":
             body["page"] = int(page)
-        if limit is not None:
+        if limit is not None and str(limit).strip() != "":
             body["limit"] = int(limit)
 
-        return self.client.request(
-            "POST",
-            "/sapi/v1/asset/transferQuery",
-            body=body,
-            signed=True,
-        )
+        return self.client.request("POST", "/sapi/v1/asset/transferQuery", body=body, signed=True)
 
     # =========================================================
     # Withdraw
     # =========================================================
 
     def withdraw_apply(self, body: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        发起提现
-        文档：
-        POST /sapi/v1/withdraw/apply
-        """
-        return self.client.request(
-            "POST",
-            "/sapi/v1/withdraw/apply",
-            body=body,
-            signed=True
-        )
+        return self.client.request("POST", "/sapi/v1/withdraw/apply", body=body, signed=True)
 
     def withdraw_history(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        查询提现记录
-        文档：
-        POST /sapi/v1/withdraw/query
-        """
-        return self.client.request(
-            "POST",
-            "/sapi/v1/withdraw/query",
-            body=params,
-            signed=True
-        )
+        return self.client.request("POST", "/sapi/v1/withdraw/query", body=params, signed=True)
