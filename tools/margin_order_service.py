@@ -51,11 +51,8 @@ def create_order(
     safe_vol = str(volume).strip() if volume is not None else ""
     safe_price = str(price).strip() if price is not None and str(price).strip() != "" else None
     
-    safe_cid = str(new_client_order_id).strip() if new_client_order_id is not None and str(new_client_order_id).strip() != "" else ""
-
-    # 【终极防线】：如果没有传入自定义 ID，强制生成杠杆专用的安全字符串 ID
-    if not safe_cid:
-        safe_cid = f"ZKE-AI-MARGIN-{safe_side}-{str(uuid.uuid4())[:4]}"
+    # 【业务保留】：自动生成杠杆专用的 AI 防重 ID
+    safe_cid = str(new_client_order_id).strip() if new_client_order_id else f"ZKE-AI-MARGIN-{safe_side}-{str(uuid.uuid4())[:4]}"
 
     data = {
         "display_symbol": display_symbol,
@@ -75,10 +72,6 @@ def create_order(
         price=safe_price,
         new_client_order_id=safe_cid,
     )
-    
-    # 【加固】：把原始返回里的长数字 ID 也转了，防止原生结果泄露
-    if isinstance(result, dict) and "orderId" in result:
-        result["orderId"] = str(result["orderId"])
 
     return data, result
 
@@ -89,11 +82,6 @@ def order_query(api, registry, symbol: Any, order_id: Optional[Any] = None, new_
     safe_oid = str(order_id).strip() if order_id is not None and str(order_id).strip() != "" else None
     safe_cid = str(new_client_order_id).strip() if new_client_order_id is not None and str(new_client_order_id).strip() != "" else None
 
-    # 【智能路由】：如果用户用 ZKE-AI ID 查单，但误传到了 order_id 字段
-    if safe_oid and safe_oid.startswith("ZKE"):
-        safe_cid = safe_oid
-        safe_oid = None
-
     result = api.order_query(
         symbol=api_symbol,
         order_id=safe_oid,
@@ -103,7 +91,6 @@ def order_query(api, registry, symbol: Any, order_id: Optional[Any] = None, new_
     if not isinstance(result, dict):
         return result
 
-    # 【核心防御】强制转换 ID，阻断 JS 精度丢失
     oid = result.get("orderId") or result.get("orderIdString")
     cid = result.get("clientOrderId") or result.get("clientorderId")
 
@@ -129,11 +116,6 @@ def cancel_order(api, registry, symbol: Any, order_id: Optional[Any] = None, new
     safe_oid = str(order_id).strip() if order_id is not None and str(order_id).strip() != "" else None
     safe_cid = str(new_client_order_id).strip() if new_client_order_id is not None and str(new_client_order_id).strip() != "" else None
 
-    # 【智能路由】：防止 AI 把 ZKE-AI 字母 ID 误传给纯数字的 order_id 字段
-    if safe_oid and safe_oid.startswith("ZKE"):
-        safe_cid = safe_oid
-        safe_oid = None
-
     result = api.cancel_order(
         symbol=api_symbol,
         order_id=safe_oid,
@@ -143,7 +125,6 @@ def cancel_order(api, registry, symbol: Any, order_id: Optional[Any] = None, new
     if not isinstance(result, dict):
         return result
 
-    # 【核心防御】强制转换 ID，阻断 JS 精度丢失
     oid = result.get("orderId") or result.get("orderIdString")
     cid = result.get("clientOrderId") or result.get("clientorderId")
 
@@ -164,9 +145,7 @@ def open_orders(api, registry, symbol: Any, limit: Any = 100):
     rows = _normalize_list_result(raw)
 
     clean = []
-
     for o in rows:
-        # 【核心防御】强制转换 ID
         oid = o.get("orderId") or o.get("orderIdString")
         cid = o.get("clientOrderId") or o.get("clientorderId")
 
@@ -202,9 +181,7 @@ def my_trades(api, registry, symbol: Any, limit: Any = 100, from_id: Optional[An
     rows = _normalize_list_result(raw)
 
     clean = []
-
     for t in rows:
-        # 【核心防御】强制转换各种交易相关的 ID
         t_id = t.get("id")
         b_id = t.get("bidId")
         a_id = t.get("askId")
