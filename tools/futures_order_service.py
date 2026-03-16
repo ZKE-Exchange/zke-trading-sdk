@@ -27,18 +27,11 @@ def _normalize_list_result(raw):
 def open_orders(api, registry, symbol=None):
     contract = registry.resolve_contract_name(symbol) if symbol else None
     result = api.open_orders(contract)
-
-    # 【加固】：确保查出来的挂单列表里，orderId 也是字符串
-    orders = _normalize_list_result(result)
-    for o in orders:
-        if "orderId" in o:
-            o["orderId"] = str(o["orderId"])
-    return orders
+    return _normalize_list_result(result)
 
 
 def order_query(api, registry, symbol, order_id=None, client_order_id=None):
     contract = registry.resolve_contract_name(symbol)
-    # 【加固】：强转字符串，防止内部直接调用时漏传引号
     safe_oid = str(order_id).strip() if order_id is not None and str(order_id).strip() != "" else None
     safe_cid = str(client_order_id).strip() if client_order_id is not None and str(client_order_id).strip() != "" else None
     return api.order(contract, order_id=safe_oid, client_order_id=safe_cid)
@@ -51,7 +44,6 @@ def my_trades(api, registry, symbol, limit=10, from_id=None):
     trade_list = _normalize_list_result(trades)
 
     clean = []
-
     for t in trade_list:
         clean.append({
             "contract": t.get("contractName", t.get("symbol")),
@@ -73,7 +65,6 @@ def order_historical(api, registry, symbol, limit=10, from_id=None):
     order_list = _normalize_list_result(orders)
 
     clean = []
-
     for o in order_list:
         clean.append({
             "contract": o.get("contractName", o.get("symbol")),
@@ -112,7 +103,6 @@ def profit_historical(
     record_list = _normalize_list_result(records)
 
     clean = []
-
     for r in record_list:
         clean.append({
             "contract": r.get("contractName", r.get("symbol")),
@@ -144,6 +134,8 @@ def create_order(
     order_unit=2,
 ):
     contract = registry.resolve_contract_name(symbol)
+    
+    safe_cid = str(client_order_id).strip() if client_order_id else ""
 
     data = {
         "contractName": contract,
@@ -153,7 +145,7 @@ def create_order(
         "type": str(order_type).upper(),
         "volume": volume,
         "price": price,
-        "clientOrderId": client_order_id,
+        "clientOrderId": safe_cid,
         "timeInForce": time_in_force,
         "orderUnit": order_unit,
     }
@@ -166,14 +158,10 @@ def create_order(
         order_type=order_type,
         volume=volume,
         price=price,
-        client_order_id=client_order_id,
+        client_order_id=safe_cid,
         time_in_force=time_in_force,
         order_unit=order_unit,
     )
-
-    # 【加固】：第一时间把新生成的长数字 ID 转为字符串，不给任何溢出机会
-    if isinstance(result, dict) and "orderId" in result:
-        result["orderId"] = str(result["orderId"])
 
     return data, result
 
@@ -220,16 +208,11 @@ def create_condition_order(
         order_unit=order_unit,
     )
 
-    # 【加固】：同样处理条件单的 ID
-    if isinstance(result, dict) and "orderId" in result:
-        result["orderId"] = str(result["orderId"])
-
     return data, result
 
 
 def cancel_order(api, registry, symbol, order_id):
     contract = registry.resolve_contract_name(symbol)
-    # 【加固】：极其重要，确保传入 API 的一定是纯净字符串
     safe_oid = str(order_id).strip() if order_id is not None and str(order_id).strip() != "" else ""
     return api.cancel_order(contract, safe_oid)
 
