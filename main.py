@@ -178,6 +178,13 @@ def print_help():
 
 
 def main():
+    # === 终极拦截网关 ===
+    # 将 --json 摘取出来并移除，避免干扰后续通过 sys.argv 索引获取参数的逻辑
+    output_json = False
+    if "--json" in sys.argv:
+        output_json = True
+        sys.argv.remove("--json")
+
     if len(sys.argv) < 2:
         print_help()
         return
@@ -274,7 +281,10 @@ def main():
         if cmd == "ticker-pretty":
             symbol = sys.argv[2]
             display_symbol, ticker_data = market_service.get_ticker_pretty_data(public_api, registry, symbol)
-            formatters.print_ticker_pretty(display_symbol, ticker_data)
+            if output_json:
+                pretty_print(ticker_data)
+            else:
+                formatters.print_ticker_pretty(display_symbol, ticker_data)
             return
 
         if cmd == "depth":
@@ -287,7 +297,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             display_symbol, depth_data = market_service.get_depth_pretty_data(public_api, registry, symbol, limit)
-            formatters.print_depth_pretty(display_symbol, depth_data, limit)
+            if output_json:
+                pretty_print(depth_data)
+            else:
+                formatters.print_depth_pretty(display_symbol, depth_data, limit)
             return
 
         if cmd == "trades":
@@ -333,7 +346,10 @@ def main():
             account_data = private_api.account()
             balances = account_service.extract_account_balances(account_data)
             nonzero = account_service.filter_nonzero_balances(balances)
-            formatters.print_account_balances_pretty(nonzero)
+            if output_json:
+                pretty_print(nonzero)
+            else:
+                formatters.print_account_balances_pretty(nonzero)
             return
 
         if cmd == "account-asset":
@@ -349,13 +365,15 @@ def main():
             account_data = private_api.account()
             balances = account_service.extract_account_balances(account_data)
             summary = account_service.get_asset_balance_summary(balances, asset)
-            formatters.print_asset_balance_pretty(summary)
+            if output_json:
+                pretty_print(summary)
+            else:
+                formatters.print_asset_balance_pretty(summary)
             return
 
         if cmd == "open-orders":
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 20
-            # 使用加固后的 service，确保返回的是纯净字符串 ID
             pretty_print(order_service.open_orders(private_api, registry, symbol, limit))
             return
 
@@ -363,7 +381,10 @@ def main():
             symbol = sys.argv[2]
             display_symbol = registry.get_display_symbol(symbol)
             orders = order_service.open_orders(private_api, registry, symbol, limit=100)
-            formatters.print_open_orders_pretty(display_symbol, orders)
+            if output_json:
+                pretty_print(orders)
+            else:
+                formatters.print_open_orders_pretty(display_symbol, orders)
             return
 
         if cmd == "order":
@@ -391,7 +412,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             display_symbol, trades = market_service.get_my_trades_pretty_data(private_api, registry, symbol, limit)
-            formatters.print_my_trades_pretty(display_symbol, trades)
+            if output_json:
+                pretty_print(trades)
+            else:
+                formatters.print_my_trades_pretty(display_symbol, trades)
             return
 
         if cmd == "history-orders":
@@ -407,7 +431,10 @@ def main():
             api_symbol = registry.get_api_symbol(symbol)
             display_symbol = registry.get_display_symbol(symbol)
             orders = private_api.history_orders(symbol=api_symbol, limit=limit)
-            formatters.print_open_orders_pretty(display_symbol, orders)
+            if output_json:
+                pretty_print(orders)
+            else:
+                formatters.print_open_orders_pretty(display_symbol, orders)
             return
 
         if cmd == "test-order":
@@ -420,7 +447,6 @@ def main():
             data, result = order_service.test_order(
                 private_api, registry, symbol, side, order_type, volume, price
             )
-            # 清理：不向 stderr 打印中文干扰项
             pretty_print(result)
             return
 
@@ -430,19 +456,16 @@ def main():
             order_type = sys.argv[4]
             volume = sys.argv[5]
             price = sys.argv[6] if len(sys.argv) > 6 else None
-            # 捕获可能传入的 client_order_id
             new_cid = sys.argv[7] if len(sys.argv) > 7 else ""
 
             data, result = order_service.create_order(
                 private_api, registry, symbol, side, order_type, volume, price, new_client_order_id=new_cid
             )
-            # 清理：只输出纯净 JSON
             pretty_print(result)
             return
 
         if cmd == "cancel-order":
             symbol = sys.argv[2]
-            # 这里统一当做 order_id 传入，底层 service 会通过 ZKE-AI 前缀自动识别
             order_id = str(sys.argv[3]) 
             result = order_service.cancel_order(private_api, registry, symbol, order_id=order_id)
             pretty_print(result)
@@ -520,7 +543,6 @@ def main():
             data, result = margin_order_service.create_order(
                 margin_api, registry, symbol, side, order_type, volume, price
             )
-            # 清理：只输出纯净 JSON
             pretty_print(result)
             return
 
@@ -585,7 +607,10 @@ def main():
         if cmd == "futures-ticker-pretty":
             symbol = sys.argv[2]
             contract_name, data = futures_service.get_ticker_pretty_data(futures_public, futures_registry, symbol)
-            formatters.print_futures_ticker_pretty(contract_name, data)
+            if output_json:
+                pretty_print(data)
+            else:
+                formatters.print_futures_ticker_pretty(contract_name, data)
             return
 
         if cmd == "futures-ticker-all":
@@ -602,7 +627,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             contract_name, data = futures_service.get_depth_pretty_data(futures_public, futures_registry, symbol, limit)
-            formatters.print_depth_pretty(contract_name, data, limit)
+            if output_json:
+                pretty_print(data)
+            else:
+                formatters.print_depth_pretty(contract_name, data, limit)
             return
 
         if cmd == "futures-index":
@@ -614,7 +642,10 @@ def main():
             symbol = sys.argv[2]
             contract_name = futures_registry.resolve_contract_name(symbol)
             data = futures_service.get_index(futures_public, futures_registry, symbol)
-            formatters.print_futures_index_pretty(contract_name, data)
+            if output_json:
+                pretty_print(data)
+            else:
+                formatters.print_futures_index_pretty(contract_name, data)
             return
 
         if cmd == "futures-klines":
@@ -639,7 +670,10 @@ def main():
 
         if cmd == "futures-balance-pretty":
             data = futures_private.account()
-            formatters.print_futures_balance_pretty(data)
+            if output_json:
+                pretty_print(data)
+            else:
+                formatters.print_futures_balance_pretty(data)
             return
 
         if cmd == "futures-positions":
@@ -655,7 +689,10 @@ def main():
             accounts = futures_account_service.extract_accounts(data)
             positions = futures_account_service.flatten_positions(accounts)
             positions = futures_account_service.filter_nonzero_positions(positions)
-            formatters.print_futures_positions_pretty(positions)
+            if output_json:
+                pretty_print(positions)
+            else:
+                formatters.print_futures_positions_pretty(positions)
             return
 
         if cmd == "futures-open-orders":
@@ -683,7 +720,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             trades = futures_order_service.my_trades(futures_private, futures_registry, symbol, limit)
-            formatters.print_futures_my_trades_pretty(trades)
+            if output_json:
+                pretty_print(trades)
+            else:
+                formatters.print_futures_my_trades_pretty(trades)
             return
 
         if cmd == "futures-order-historical":
@@ -696,7 +736,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             orders = futures_order_service.order_historical(futures_private, futures_registry, symbol, limit)
-            formatters.print_futures_order_history_pretty(orders)
+            if output_json:
+                pretty_print(orders)
+            else:
+                formatters.print_futures_order_history_pretty(orders)
             return
 
         if cmd == "futures-profit-historical":
@@ -709,7 +752,10 @@ def main():
             symbol = sys.argv[2]
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
             records = futures_order_service.profit_historical(futures_private, futures_registry, symbol, limit=limit)
-            formatters.print_futures_profit_pretty(records)
+            if output_json:
+                pretty_print(records)
+            else:
+                formatters.print_futures_profit_pretty(records)
             return
 
         if cmd == "futures-create-order":
@@ -732,7 +778,6 @@ def main():
                 volume,
                 price
             )
-            # 清理：只输出纯净 JSON
             pretty_print(result)
             return
 
