@@ -39,8 +39,9 @@ def order_query(api, registry, symbol, order_id=None, client_order_id=None):
 
 def my_trades(api, registry, symbol, limit=10, from_id=None):
     contract = registry.resolve_contract_name(symbol)
+    safe_from = str(from_id).strip() if from_id is not None and str(from_id).strip() != "" else None
 
-    trades = api.my_trades(contract, limit=limit, from_id=from_id)
+    trades = api.my_trades(contract, limit=limit, from_id=safe_from)
     trade_list = _normalize_list_result(trades)
 
     clean = []
@@ -60,8 +61,9 @@ def my_trades(api, registry, symbol, limit=10, from_id=None):
 
 def order_historical(api, registry, symbol, limit=10, from_id=None):
     contract = registry.resolve_contract_name(symbol)
+    safe_from = str(from_id).strip() if from_id is not None and str(from_id).strip() != "" else None
 
-    orders = api.order_historical(contract, limit=limit, from_id=from_id)
+    orders = api.order_historical(contract, limit=limit, from_id=safe_from)
     order_list = _normalize_list_result(orders)
 
     clean = []
@@ -92,11 +94,12 @@ def profit_historical(
     end_time=None,
 ):
     contract = registry.resolve_contract_name(symbol) if symbol else None
+    safe_from = str(from_id).strip() if from_id is not None and str(from_id).strip() != "" else None
 
     records = api.profit_historical(
         contract_name=contract,
         limit=limit,
-        from_id=from_id,
+        from_id=safe_from,
         start_time=start_time,
         end_time=end_time,
     )
@@ -233,7 +236,8 @@ def edit_margin_mode(api, registry, symbol, margin_model):
 
 
 def edit_position_margin(api, position_id, amount):
-    return api.edit_position_margin(position_id, amount)
+    safe_pid = str(position_id).strip() if position_id is not None else ""
+    return api.edit_position_margin(safe_pid, amount)
 
 
 def edit_leverage(api, registry, symbol, now_level):
