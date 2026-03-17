@@ -17,7 +17,7 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ coin, amount }) => {
         return await runMainJson(
-          ["transfer-spot-to-futures", String(coin), String(amount)],
+          ["transfer-spot-to-futures", String(coin), String(amount), "--json"],
           config
         );
       },
@@ -36,7 +36,7 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ coin, amount }) => {
         return await runMainJson(
-          ["transfer-futures-to-spot", String(coin), String(amount)],
+          ["transfer-futures-to-spot", String(coin), String(amount), "--json"],
           config
         );
       },
@@ -60,6 +60,7 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
         if (String(from_account).trim()) args.push(String(from_account));
         if (String(to_account).trim()) args.push(String(to_account));
         args.push(String(limit));
+        args.push("--json");
         return await runMainJson(args, config);
       },
     },
@@ -76,9 +77,9 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ coin = "", limit = 20 }) => {
         if (coin) {
-          return await runMainJson(["withdraw-history", String(coin), String(limit)], config);
+          return await runMainJson(["withdraw-history", String(coin), String(limit), "--json"], config);
         }
-        return await runMainJson(["withdraw-history"], config);
+        return await runMainJson(["withdraw-history", "--json"], config);
       },
     },
     {
@@ -100,6 +101,7 @@ export function createWalletTools(config?: PluginConfig): ToolSpec[] {
         if (String(memo).trim()) {
           args.push(String(memo));
         }
+        args.push("--json");
         return await runMainJson(args, config);
       },
     },
