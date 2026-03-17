@@ -29,6 +29,7 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
         if (String(order_type).toUpperCase() === "LIMIT") {
           args.push(String(price));
         }
+        args.push("--json");
         return await runMainJson(args, config);
       }
     },
@@ -46,7 +47,7 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, order_id }) => {
         return await runMainJson(
-          ["margin-order", String(symbol), String(order_id)],
+          ["margin-order", String(symbol), String(order_id), "--json"],
           config
         );
       }
@@ -65,7 +66,7 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, order_id }) => {
         return await runMainJson(
-          ["margin-cancel-order", String(symbol), String(order_id)],
+          ["margin-cancel-order", String(symbol), String(order_id), "--json"],
           config
         );
       }
@@ -84,7 +85,7 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, limit = 100 }) => {
         return await runMainJson(
-          ["margin-open-orders", String(symbol), String(limit)],
+          ["margin-open-orders", String(symbol), String(limit), "--json"],
           config
         );
       }
@@ -103,7 +104,7 @@ export function createMarginTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, limit = 100 }) => {
         return await runMainJson(
-          ["margin-my-trades", String(symbol), String(limit)],
+          ["margin-my-trades", String(symbol), String(limit), "--json"],
           config
         );
       }
