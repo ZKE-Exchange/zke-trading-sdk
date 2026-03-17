@@ -84,21 +84,20 @@ FUTURES_REGISTRY = futures_service.get_registry(FUTURES_PUBLIC)
 
 def _sanitize_id(obj: Any):
     """
-    智能伪装核心：将所有 orderId 强制套上 OID_ 前缀，防止大模型将其作为数字导致 JS 精度丢失。
+    统一将所有容易导致 JS 和大模型精度丢失的 ID 或大数值字段转为字符串。
     """
     if isinstance(obj, list):
         for item in obj:
             _sanitize_id(item)
     elif isinstance(obj, dict):
-        # 1. 专门给系统 orderId 套上伪装
-        for key in ["orderId", "order_id", "orderIdString"]:
-            if key in obj and obj[key] is not None:
-                raw_id = str(obj[key]).strip()
-                if raw_id and raw_id != "None" and not raw_id.startswith("OID_"):
-                    obj[key] = f"OID_{raw_id}"
-
-        # 2. 其他的 ID (比如自定义ID) 正常转为字符串
-        for key in ["clientOrderId", "client_order_id", "position_id", "positionId"]:
+        # 将常见的大整数/ID 字段转为字符串
+        id_keys = [
+            "orderId", "order_id", "orderIdString", 
+            "clientOrderId", "client_order_id", 
+            "position_id", "positionId", 
+            "tradeId", "trade_id", "id"
+        ]
+        for key in id_keys:
             if key in obj and obj[key] is not None:
                 obj[key] = str(obj[key])
                 
@@ -225,13 +224,8 @@ def create_spot_order(symbol: str, side: str, order_type: str, volume: str, pric
 def cancel_spot_order(symbol: str, order_id: str = "", client_order_id: str = "") -> Dict[str, Any]:
     """
     撤销现货订单。
-    传入包含 OID_ 前缀的 order_id，或 client_order_id。
     """
     safe_oid = str(order_id).strip() if order_id else ""
-    # 【卸妆】：切掉 OID_ 前缀
-    if safe_oid.startswith("OID_"):
-        safe_oid = safe_oid[4:]
-        
     safe_cid = str(client_order_id).strip() if client_order_id else ""
 
     result = order_service.cancel_order(SPOT_PRIVATE, SPOT_REGISTRY, symbol, order_id=safe_oid, client_order_id=safe_cid)
@@ -291,8 +285,6 @@ def create_margin_order(symbol: str, side: str, order_type: str, volume: str, pr
 @mcp.tool()
 def get_margin_order(symbol: str, order_id: str = "", client_order_id: str = "") -> Dict[str, Any]:
     safe_oid = str(order_id).strip() if order_id else ""
-    if safe_oid.startswith("OID_"):
-        safe_oid = safe_oid[4:]
     result = margin_order_service.order_query(MARGIN_PRIVATE, SPOT_REGISTRY, symbol, order_id=safe_oid, new_client_order_id=client_order_id)
     _sanitize_id(result); return result
 
@@ -300,12 +292,8 @@ def get_margin_order(symbol: str, order_id: str = "", client_order_id: str = "")
 def cancel_margin_order(symbol: str, order_id: str = "", client_order_id: str = "") -> Dict[str, Any]:
     """
     撤销杠杆订单。
-    传入包含 OID_ 前缀的 order_id，或 client_order_id。
     """
     safe_oid = str(order_id).strip() if order_id else ""
-    if safe_oid.startswith("OID_"):
-        safe_oid = safe_oid[4:]
-        
     safe_cid = str(client_order_id).strip() if client_order_id else ""
 
     result = margin_order_service.cancel_order(MARGIN_PRIVATE, SPOT_REGISTRY, symbol, order_id=safe_oid, new_client_order_id=safe_cid)
@@ -396,8 +384,6 @@ def get_futures_order(symbol: str, order_id: str = "", client_order_id: str = ""
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
     
     safe_oid = str(order_id).strip() if order_id else ""
-    if safe_oid.startswith("OID_"):
-        safe_oid = safe_oid[4:]
         
     raw = FUTURES_PRIVATE.order(contract_name=contract, order_id=safe_oid if safe_oid else None, client_order_id=str(client_order_id) if client_order_id else None)
     
@@ -483,11 +469,8 @@ def create_futures_condition_order(symbol: str, side: str, open_action: str, pos
 def cancel_futures_order(symbol: str, order_id: str) -> Dict[str, Any]:
     """
     撤销合约订单。
-    传入包含 OID_ 前缀的 order_id。
     """
     safe_oid = str(order_id).strip()
-    if safe_oid.startswith("OID_"):
-        safe_oid = safe_oid[4:]
         
     result = futures_order_service.cancel_order(FUTURES_PRIVATE, FUTURES_REGISTRY, symbol, safe_oid)
     contract = FUTURES_REGISTRY.resolve_contract_name(symbol)
