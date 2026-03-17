@@ -19,9 +19,9 @@ ZKE Exchange requires very specific symbol formats depending on the endpoint. Yo
     * *Example:* `BTC-USDT`
 
 ## 3. Parameter Quirks & Best Practices
-* **Order IDs & Precision Loss (CRITICAL):** Numeric order IDs are extremely long and WILL cause precision loss if passed as integers. The system automatically shields these by adding an `OID_` prefix.
-    * **AI Generated Orders:** Orders created by you will have a `client_order_id` starting with `ZKE-AI-` (e.g., `ZKE-AI-SELL-a1b2`). Use this string when querying or canceling these orders.
-    * **Manual/System Orders:** If the order only has a native `order_id`, the system will present it to you as `OID_123456789...`. You **MUST** pass this exact, complete string (including the `OID_` prefix) into the `order_id` tool parameter. The backend will automatically strip the prefix before sending it to the exchange.
+* **Order IDs & Precision Loss (CRITICAL):** Numeric order IDs are extremely long and will cause precision loss if passed as integers. The system automatically converts all IDs to strings.
+    * **AI Generated Orders:** Orders created by you will often have a `client_order_id` starting with `ZKE-AI-` (e.g., `ZKE-AI-SELL-a1b2`). Use this string when querying or canceling these orders.
+    * **String Type Enforcement:** You **MUST** pass `order_id` and `client_order_id` back exactly as the string you received them. Do NOT convert them to numbers/integers when calling tools like `cancel_order` or `order_query`.
 * **Timestamps:** When an endpoint (like futures transaction history) requires `begin_time` or `end_time`, you MUST use **13-digit millisecond timestamps** (e.g., `1740787200000`). Do not use `YYYY-MM-DD` strings.
 * **Transfer History:** Do not call transfer history with empty parameters. Always try to provide `from_account` and `to_account`. Valid account types are `EXCHANGE` (Spot) and `FUTURE`.
 * **Tool Parameters:** Rely on the explicit `inputSchema` provided by each tool to determine required fields (e.g., only provide `price` if `order_type` is `LIMIT`).
