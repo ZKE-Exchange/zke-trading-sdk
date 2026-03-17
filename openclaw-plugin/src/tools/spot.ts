@@ -15,7 +15,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol }) => {
-        return await runMainJson(["ticker", String(symbol)], config);
+        return await runMainJson(["ticker", String(symbol), "--json"], config);
       },
     },
     {
@@ -31,7 +31,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(["depth", String(symbol), String(limit)], config);
+        return await runMainJson(["depth", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -47,7 +47,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, interval = "1day" }) => {
-        return await runMainJson(["klines", String(symbol), String(interval)], config);
+        return await runMainJson(["klines", String(symbol), String(interval), "--json"], config);
       },
     },
     {
@@ -59,7 +59,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async () => {
-        return await runMainJson(["account"], config);
+        return await runMainJson(["account", "--json"], config);
       },
     },
     {
@@ -71,7 +71,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async () => {
-        return await runMainJson(["account-nonzero"], config);
+        return await runMainJson(["account-nonzero", "--json"], config);
       },
     },
     {
@@ -86,7 +86,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ asset }) => {
-        return await runMainJson(["balance", String(asset)], config);
+        return await runMainJson(["balance", String(asset), "--json"], config);
       },
     },
     {
@@ -101,7 +101,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ account_type }) => {
-        return await runMainJson(["account-by-type", String(account_type)], config);
+        return await runMainJson(["account-by-type", String(account_type), "--json"], config);
       },
     },
     {
@@ -117,7 +117,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(["open-orders", String(symbol), String(limit)], config);
+        return await runMainJson(["open-orders", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -133,7 +133,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 20 }) => {
-        return await runMainJson(["my-trades", String(symbol), String(limit)], config);
+        return await runMainJson(["my-trades", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -149,7 +149,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 50 }) => {
-        return await runMainJson(["my-trades-v3", String(symbol), String(limit)], config);
+        return await runMainJson(["my-trades-v3", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -165,7 +165,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 50 }) => {
-        return await runMainJson(["history-orders", String(symbol), String(limit)], config);
+        return await runMainJson(["history-orders", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -194,6 +194,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         if (String(order_type).toUpperCase() === "LIMIT") {
           args.push(String(price));
         }
+        args.push("--json");
         return await runMainJson(args, config);
       },
     },
@@ -210,7 +211,7 @@ export function createSpotTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
-        return await runMainJson(["cancel-order", String(symbol), String(order_id)], config);
+        return await runMainJson(["cancel-order", String(symbol), String(order_id), "--json"], config);
       },
     },
   ];
