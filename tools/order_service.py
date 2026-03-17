@@ -75,7 +75,7 @@ def create_order(
         recv_window=recv_window,
     )
 
-    # 顺手把生成的 clientOrderId 塞回结果，不隐藏原始 orderId，交给上层去套 OID_
+    # 把生成的 clientOrderId 塞回结果，原始 ID 会在最外层（FastMCP 返回前）统一被转为字符串
     if isinstance(result, dict):
         result["clientOrderId"] = str(safe_cid)
 
@@ -90,7 +90,7 @@ def cancel_order(
     client_order_id: Optional[Any] = None,
 ):
     """
-    撤销订单 - 解除限制，同时支持数字 order_id 和字母 client_order_id
+    撤销订单 - 同时支持数字 order_id 和字母 client_order_id
     """
     api_symbol = registry.get_api_symbol(symbol)
 
@@ -109,7 +109,7 @@ def cancel_order(
 
 def open_orders(private_api, registry, symbol: Any, limit: Any = 100):
     """
-    查询当前挂单 - 纯净转发，交给上层处理安全套
+    查询当前挂单 - 纯净转发，交给最外层统一处理字符串化
     """
     api_symbol = registry.get_api_symbol(symbol)
     safe_limit = int(limit) if limit is not None and str(limit).strip() != "" else 100
