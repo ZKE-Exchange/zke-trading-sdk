@@ -15,7 +15,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol }) => {
-        return await runMainJson(["futures-ticker", String(symbol)], config);
+        return await runMainJson(["futures-ticker", String(symbol), "--json"], config);
       },
     },
     {
@@ -30,7 +30,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol }) => {
-        return await runMainJson(["futures-index", String(symbol)], config);
+        return await runMainJson(["futures-index", String(symbol), "--json"], config);
       },
     },
     {
@@ -44,7 +44,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ margin_coin = "USDT" }) => {
-        return await runMainJson(["futures-balance", String(margin_coin)], config);
+        return await runMainJson(["futures-balance", String(margin_coin), "--json"], config);
       },
     },
     {
@@ -56,7 +56,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async () => {
-        return await runMainJson(["futures-positions"], config);
+        return await runMainJson(["futures-positions", "--json"], config);
       },
     },
     {
@@ -72,7 +72,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
-        return await runMainJson(["futures-order", String(symbol), String(order_id)], config);
+        return await runMainJson(["futures-order", String(symbol), String(order_id), "--json"], config);
       },
     },
     {
@@ -87,7 +87,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol }) => {
-        return await runMainJson(["futures-open-orders", String(symbol)], config);
+        return await runMainJson(["futures-open-orders", String(symbol), "--json"], config);
       },
     },
     {
@@ -103,7 +103,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 10 }) => {
-        return await runMainJson(["futures-my-trades", String(symbol), String(limit)], config);
+        return await runMainJson(["futures-my-trades", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -119,7 +119,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 10 }) => {
-        return await runMainJson(["futures-order-historical", String(symbol), String(limit)], config);
+        return await runMainJson(["futures-order-historical", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -135,7 +135,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, limit = 10 }) => {
-        return await runMainJson(["futures-profit-historical", String(symbol), String(limit)], config);
+        return await runMainJson(["futures-profit-historical", String(symbol), String(limit), "--json"], config);
       },
     },
     {
@@ -187,6 +187,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         if (String(order_type).toUpperCase() === "LIMIT") {
           args.push(String(price));
         }
+        args.push("--json");
         return await runMainJson(args, config);
       },
     },
@@ -243,6 +244,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         if (String(price).trim()) {
           args.push(String(price));
         }
+        args.push("--json");
         return await runMainJson(args, config);
       },
     },
@@ -259,7 +261,7 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
         additionalProperties: false,
       },
       execute: async ({ symbol, order_id }) => {
-        return await runMainJson(["futures-cancel-order", String(symbol), String(order_id)], config);
+        return await runMainJson(["futures-cancel-order", String(symbol), String(order_id), "--json"], config);
       },
     },
     {
@@ -274,9 +276,9 @@ export function createFuturesTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol = "" }) => {
         if (String(symbol).trim()) {
-          return await runMainJson(["futures-cancel-all-orders", String(symbol)], config);
+          return await runMainJson(["futures-cancel-all-orders", String(symbol), "--json"], config);
         }
-        return await runMainJson(["futures-cancel-all-orders"], config);
+        return await runMainJson(["futures-cancel-all-orders", "--json"], config);
       },
     },
   ];
