@@ -17,7 +17,7 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, position_model }) => {
         return await runMainJson(
-          ["futures-edit-position-mode", String(symbol), String(position_model)],
+          ["futures-edit-position-mode", String(symbol), String(position_model), "--json"],
           config
         );
       }
@@ -36,7 +36,7 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, margin_model }) => {
         return await runMainJson(
-          ["futures-edit-margin-mode", String(symbol), String(margin_model)],
+          ["futures-edit-margin-mode", String(symbol), String(margin_model), "--json"],
           config
         );
       }
@@ -55,7 +55,7 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ position_id, amount }) => {
         return await runMainJson(
-          ["futures-edit-position-margin", String(position_id), String(amount)],
+          ["futures-edit-position-margin", String(position_id), String(amount), "--json"],
           config
         );
       }
@@ -74,7 +74,7 @@ export function createFuturesControlTools(config?: PluginConfig): ToolSpec[] {
       },
       execute: async ({ symbol, now_level }) => {
         return await runMainJson(
-          ["futures-edit-leverage", String(symbol), String(now_level)],
+          ["futures-edit-leverage", String(symbol), String(now_level), "--json"],
           config
         );
       }
