@@ -63,6 +63,9 @@ export function createFuturesTransactionTools(config?: PluginConfig): ToolSpec[]
           args.push(String(tx_type));
         }
 
+        // 加上 --json 尾巴
+        args.push("--json");
+
         return await runMainJson(args, config);
       }
     }
